@@ -295,6 +295,12 @@ p {
   pointer-events: none;
 }
 
+/* El cursor (mira, lápiz) debe verse por encima de la barra de herramientas,
+   del indicador y de los avisos; los trazos del dibujo quedan por debajo. */
+#overlayCanvas {
+  z-index: 7;
+}
+
 /* ----------------- Barra de herramientas (paleta y pinceles) ----------------- */
 
 .dock {
