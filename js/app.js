@@ -741,7 +741,7 @@ function renderOverlay(pts) {
   octx.clearRect(0, 0, state.size.w, state.size.h);
   if (!pts) return;
   if (state.mode === "signs") {
-    drawSkeleton(pts); // en este modo el esqueleto ayuda a ver qué detecta el sistema
+    if (state.showSkeleton) drawSkeleton(pts); // oculto por defecto
     drawSignTag(pts);
     return;
   }
@@ -766,18 +766,10 @@ function drawSignTag(pts) {
   const pad = 14 * s;
   const x = minX - pad;
   const y = minY - pad;
-  const w = maxX - minX + pad * 2;
-  const h = maxY - minY + pad * 2;
   const recognized = Boolean(info?.label);
 
   octx.save();
-  octx.lineWidth = 3 * s;
-  octx.setLineDash(recognized ? [] : [8 * s, 6 * s]);
-  octx.strokeStyle = recognized ? "#22d3ee" : "rgba(255, 255, 255, 0.55)";
-  octx.beginPath();
-  if (octx.roundRect) octx.roundRect(x, y, w, h, 14 * s);
-  else octx.rect(x, y, w, h);
-  octx.stroke();
+  // El recuadro punteado se eliminó: solo se muestra la etiqueta con la letra reconocida.
 
   if (recognized) {
     const text = `${signs.symbolFor(info.label)}  ${Math.round(info.confidence * 100)} %`;
