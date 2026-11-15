@@ -102,7 +102,8 @@ camaraweb_deteccionmanos/
 4. **Estabilización.** Un gesto nuevo debe mantenerse 3 fotogramas consecutivos para ser aceptado, y durante las transiciones el trazo se congela, evitando garabatos al cambiar de seña.
 5. **Rechazo de saltos.** Si la posición del dedo se desplaza de forma implausible en un fotograma (más del 8 % del lado mayor del lienzo) se conserva la última posición válida, y solo se acepta el nuevo sitio si persiste 4 fotogramas seguidos. Así se descartan los errores puntuales de seguimiento.
 6. **Suavizado.** La posición del dedo (o del centro de la palma al borrar) pasa por un filtro 1€, que suaviza intensamente a baja velocidad y poco a alta velocidad.
-7. **Dibujo.** Los trazos se almacenan con coordenadas normalizadas, por lo que son independientes de la resolución; esto permite deshacer, restaurar y redibujar sin pérdida de calidad.
+7. **Estabilizador de correa.** El cursor queda unido al punto suavizado por una «correa» (≈10 px con el ajuste por defecto): el temblor dentro de ese radio no mueve el cursor, de modo que con la mano quieta no se generan líneas en zigzag. El radio se ajusta con el control «Suavizado del trazo».
+8. **Dibujo.** Los trazos se almacenan con coordenadas normalizadas, por lo que son independientes de la resolución; esto permite deshacer, restaurar y redibujar sin pérdida de calidad.
 
 ## Pruebas
 
@@ -110,7 +111,7 @@ camaraweb_deteccionmanos/
 npm test
 ```
 
-Ejecuta 17 pruebas unitarias (Node.js ≥ 18, sin dependencias) sobre la clasificación de gestos —incluida su invariancia a la rotación de la mano— el comportamiento del filtro de suavizado y el rechazo de saltos bruscos.
+Ejecuta 22 pruebas unitarias (Node.js ≥ 18, sin dependencias) sobre la clasificación de gestos —incluida su invariancia a la rotación de la mano— el comportamiento del filtro de suavizado el rechazo de saltos bruscos y el estabilizador de temblor con la mano quieta.
 
 ## Consejos de uso y limitaciones
 

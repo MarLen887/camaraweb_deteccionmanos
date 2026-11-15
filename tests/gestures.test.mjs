@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   GESTURE,
   JumpRejector,
+  LazyLeash,
   OneEuroFilter,
   classifyGesture,
   fingerStates,
@@ -183,4 +184,73 @@ test("rechazo de saltos: reset() acepta de inmediato cualquier posición", () =>
   gate.filter({ x: 0, y: 0 }, 0, LIMIT);
   gate.reset();
   assert.deepEqual(gate.filter({ x: 900, y: 500 }, 10 * FRAME_MS, LIMIT), { x: 900, y: 500 });
+});
+
+/* ----------------------- Mano quieta con temblor ----------------------- */
+
+/** Generador pseudoaleatorio determinista (LCG) para pruebas reproducibles. */
+function makeRandom(seed = 12345) {
+  let s = seed;
+  return () => {
+    s = (s * 1664525 + 1013904223) % 4294967296;
+    return s / 4294967296;
+  };
+}
+
+/** Longitud total del recorrido de una serie de puntos. */
+const pathLength = (pts) =>
+  pts.slice(1).reduce((acc, p, i) => acc + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
+
+/** Simula una mano QUIETA en (640, 360) con temblor de ±amp px a 30 FPS. */
+function simulateStillHand({ amp, beta, minCutoff, radius, frames = 180 }) {
+  const rand = makeRandom();
+  const fx = new OneEuroFilter({ minCutoff, beta, dCutoff: 1 });
+  const fy = new OneEuroFilter({ minCutoff, beta, dCutoff: 1 });
+  const leash = new LazyLeash();
+  const out = [];
+  for (let i = 0; i < frames; i++) {
+    const t = i / 30;
+    const noisy = { x: 640 + (rand() * 2 - 1) * amp, y: 360 + (rand() * 2 - 1) * amp };
+    const smooth = { x: fx.filter(noisy.x, t), y: fy.filter(noisy.y, t) };
+    out.push(leash.filter(smooth, radius));
+  }
+  return out.slice(30); // se descarta el transitorio inicial
+}
+
+test("correa: dentro del radio el cursor no se mueve", () => {
+  const leash = new LazyLeash();
+  const first = leash.filter({ x: 100, y: 100 }, 10);
+  assert.deepEqual(leash.filter({ x: 105, y: 103 }, 10), first);
+  assert.deepEqual(leash.filter({ x: 96, y: 98 }, 10), first);
+});
+
+test("correa: fuera del radio el cursor sigue al punto a distancia ≤ radio", () => {
+  const leash = new LazyLeash();
+  leash.filter({ x: 0, y: 0 }, 10);
+  const c = leash.filter({ x: 100, y: 0 }, 10);
+  assert.ok(Math.abs(c.x - 90) < 1e-9 && c.y === 0, `esperado (90, 0), obtenido (${c.x}, ${c.y})`);
+});
+
+test("correa: radio 0 equivale a no estabilizar", () => {
+  const leash = new LazyLeash();
+  leash.filter({ x: 0, y: 0 }, 0);
+  assert.deepEqual(leash.filter({ x: 3, y: 4 }, 0), { x: 3, y: 4 });
+});
+
+test("mano quieta con temblor ±12 px: el cursor queda casi inmóvil con la nueva configuración", () => {
+  const before = simulateStillHand({ amp: 12, beta: 0.02, minCutoff: 1.35, radius: 0 }); // configuración anterior
+  const after = simulateStillHand({ amp: 12, beta: 0.002, minCutoff: 1.35, radius: 9.9 }); // configuración nueva
+  const lenBefore = pathLength(before);
+  const lenAfter = pathLength(after);
+  console.log(`  recorrido con mano quieta (150 fotogramas): antes ${lenBefore.toFixed(0)} px → ahora ${lenAfter.toFixed(0)} px`);
+  assert.ok(lenAfter < lenBefore * 0.1, "el recorrido espurio debe reducirse al menos 10 veces");
+  assert.ok(lenAfter < 60, `recorrido residual demasiado grande: ${lenAfter.toFixed(1)} px`);
+});
+
+test("movimiento real lento y continuo: la correa no lo detiene (lo sigue con retardo ≤ radio)", () => {
+  const leash = new LazyLeash();
+  let c;
+  for (let i = 0; i < 100; i++) c = leash.filter({ x: i * 3, y: 200 }, 10);
+  const target = 99 * 3;
+  assert.ok(target - c.x <= 10 + 1e-9 && target - c.x >= 0, `retardo ${target - c.x}`);
 });

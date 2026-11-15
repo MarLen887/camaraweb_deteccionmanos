@@ -18,11 +18,12 @@ import {
   GESTURE,
   HAND_CONNECTIONS,
   JumpRejector,
+  LazyLeash,
   OneEuroFilter,
   classifyGesture,
   fingertip,
   palmCenter,
-} from "./gestures.js?v=9";
+} from "./gestures.js?v=10";
 
 /* ========================================================================== */
 /*  Configuración                                                              */
@@ -186,10 +187,13 @@ const state = {
   viaGesture: false, // true mientras un botón se activa por gestos
 
   fps: { frames: 0, t0: 0 },
+  leashRatio: 0, // Radio de la correa como fracción del lado mayor del lienzo (según el control de suavizado)
 };
 
-const filterX = new OneEuroFilter({ minCutoff: 1.35, beta: 0.02, dCutoff: 1 });
-const filterY = new OneEuroFilter({ minCutoff: 1.35, beta: 0.02, dCutoff: 1 });
+// beta bajo: en píxeles, el temblor de la mano quieta parece "movimiento rápido" y abriría el filtro.
+const filterX = new OneEuroFilter({ minCutoff: 1.35, beta: 0.002, dCutoff: 1 });
+const filterY = new OneEuroFilter({ minCutoff: 1.35, beta: 0.002, dCutoff: 1 });
+const leash = new LazyLeash();
 const jumpGate = new JumpRejector({ confirmFrames: JUMP_CONFIRM_FRAMES });
 
 /** Reinicia todo el seguimiento del cursor (filtros y rechazo de saltos). */
@@ -197,6 +201,7 @@ function resetCursorTracking() {
   filterX.reset();
   filterY.reset();
   jumpGate.reset();
+  leash.reset();
 }
 
 /** Factor de escala de grosores respecto a la resolución de referencia. */
@@ -527,6 +532,7 @@ function applySmoothing() {
   const minCutoff = 6 * Math.pow(0.4 / 6, v / 100);
   filterX.minCutoff = minCutoff;
   filterY.minCutoff = minCutoff;
+  state.leashRatio = (v / 100) * 0.014; // 0 → sin correa · 55 → ≈10 px · 100 → ≈18 px (en 1280 px)
   el.smoothOut.textContent = v < 34 ? "Bajo" : v < 67 ? "Medio" : "Alto";
 }
 
@@ -666,10 +672,12 @@ function processFrame(result, nowMs) {
   const t = nowMs / 1000;
   // Se limita al lienzo: con la mano en el borde, MediaPipe puede estimar puntos fuera del cuadro.
   const clamp = (v, max) => Math.min(Math.max(v, 0), max);
-  state.cursor = {
+  const smoothed = {
     x: clamp(filterX.filter(anchor.x, t), w),
     y: clamp(filterY.filter(anchor.y, t), h),
   };
+  // Correa: con la mano quieta, el temblor dentro del radio no mueve el cursor.
+  state.cursor = leash.filter(smoothed, state.leashRatio * Math.max(w, h));
 
   // Solo se traza cuando el fotograma coincide con el gesto aceptado: durante
   // las transiciones se "congela" el trazo para evitar garabatos al cambiar de gesto.

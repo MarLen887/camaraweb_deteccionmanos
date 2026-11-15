@@ -292,3 +292,44 @@ export class JumpRejector {
     return this.last;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Estabilizador de "correa" (lazy brush)                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Estabilizador tipo "correa" usado en programas de dibujo (lazy brush).
+ *
+ * El cursor está unido al punto medido por una correa de longitud `radius`:
+ * mientras el punto se mueva dentro de ese radio, el cursor permanece quieto
+ * (se elimina el temblor con la mano detenida); si el punto sale del radio,
+ * el cursor lo sigue manteniéndose siempre a esa distancia como máximo.
+ */
+export class LazyLeash {
+  constructor() {
+    this.pos = null;
+  }
+
+  reset() {
+    this.pos = null;
+  }
+
+  /**
+   * @param {{x:number,y:number}} p Punto medido (ya suavizado).
+   * @param {number} radius Longitud de la correa en píxeles (0 = sin estabilizar).
+   * @returns {{x:number,y:number}} Posición del cursor.
+   */
+  filter(p, radius) {
+    if (!this.pos || !(radius > 0)) {
+      this.pos = { x: p.x, y: p.y };
+      return { ...this.pos };
+    }
+    const dx = this.pos.x - p.x;
+    const dy = this.pos.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d > radius) {
+      this.pos = { x: p.x + (dx / d) * radius, y: p.y + (dy / d) * radius };
+    }
+    return { ...this.pos };
+  }
+}
