@@ -19,7 +19,7 @@ import {
   extractFeatures,
   parseDataset,
   serializeDataset,
-} from "./signs.js?v=12";
+} from "./signs.js?v=13";
 
 const STORAGE_KEY = "aircanvas.signs.v1";
 const COUNTDOWN_MS = 3000; // Cuenta regresiva antes de grabar

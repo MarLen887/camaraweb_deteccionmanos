@@ -18,6 +18,7 @@ La detección de manos se ejecuta **localmente en el navegador** con [MediaPipe 
 - Fondo configurable: cámara, pizarra clara o pizarra oscura.
 - Modo de pantalla completa, atajos de teclado y diseño adaptable (escritorio, tableta y móvil).
 - **Modo Señas (LSM):** reconoce las letras estáticas del alfabeto dactilológico de la Lengua de Señas Mexicana mediante entrenamiento en el navegador y va formando las palabras (ver la sección siguiente).
+- **Modo Emojis:** reconoce gestos de una o dos manos (👍 👎 ✌️ 👌 ✊ ✋ ☝️ 🤟 🤘 🤙 ❤️ 🙏 👏 🙌) y muestra el emoji correspondiente sobre el video, con historial y guía de gestos.
 
 ## Gestos
 
@@ -61,6 +62,25 @@ El entrenamiento se guarda en el navegador (`localStorage`) y puede exportarse o
 3. **Estabilización.** Voto de mayoría sobre los últimos 5 fotogramas.
 4. **Formación de palabras.** Un autómata confirma la seña tras 1 s, tolera parpadeos de 0.2 s y exige «soltar» la seña antes de repetirla.
 5. **Validación cruzada «dejando fuera la grabación».** Cada ejemplo se evalúa solo con ejemplos de *otras* grabaciones, para no inflar la precisión comparando fotogramas casi idénticos.
+
+## Modo Emojis
+
+Tercera pestaña (😀 Emojis). Al encender la cámara, el sistema muestra el emoji que forman tus manos:
+
+| Emoji | Gesto |
+|---|---|
+| 👍 / 👎 | Puño con el pulgar hacia arriba / abajo |
+| ✌️ · ☝️ · ✊ · ✋ | Paz · índice arriba · puño · mano abierta |
+| 👌 | Pulgar e índice en círculo; los otros tres dedos extendidos |
+| 🤟 · 🤘 · 🤙 | Te quiero · rock · llámame |
+| ❤️ | Corazón con ambas manos (pulgares juntos abajo, puntas de los índices juntas arriba) |
+| 🙏 | Palmas abiertas juntas, dedos hacia arriba |
+| 👏 | Aplauso: juntar con rapidez dos palmas abiertas (el emoji permanece 1.5 s) |
+| 🙌 | Dos manos abiertas y separadas |
+
+**Funcionamiento.** Reglas geométricas sobre los 21 landmarks (longitud de dedos respecto a la muñeca, distancias entre puntas normalizadas por el tamaño de la palma, orientación del pulgar). Un gesto debe mantenerse unos 0.35 s para activarse y tolera parpadeos de hasta 0.25 s. El aplauso se detecta como un evento temporal (manos separadas que se juntan en menos de 0.7 s), con tolerancia a que el detector pierda las manos al chocar. Solo este modo solicita dos manos al modelo.
+
+**Limitaciones.** Los umbrales se calibraron con manos sintéticas y pruebas en navegador con cámara simulada; no se han validado con personas reales, por lo que ❤️ y 👏 en particular pueden requerir ajustes (`THRESHOLDS` en `js/emoji.js`). El corazón y las manos juntas exigen que ambas manos se vean completas. Reconocer dos manos reduce los fotogramas por segundo.
 
 ## Atajos de teclado
 
@@ -120,12 +140,15 @@ camaraweb_deteccionmanos/
 │   ├── app.js              Cámara, modelo, dibujo, interfaz y selección por gestos
 │   ├── gestures.js         Lógica pura: gestos, filtro 1€, rechazo de saltos y correa (sin DOM)
 │   ├── signs.js            Lógica pura del modo Señas: características, k-NN, palabras (sin DOM)
-│   └── signs-ui.js         Interfaz del modo Señas: entrenamiento, palabra y persistencia
+│   ├── signs-ui.js         Interfaz del modo Señas: entrenamiento, palabra y persistencia
+│   ├── emoji.js            Lógica pura del modo Emojis: reglas de gestos de una y dos manos (sin DOM)
+│   └── emoji-ui.js         Interfaz del modo Emojis: emoji en pantalla, historial y guía
 ├── assets/
 │   └── favicon.svg
 ├── tests/
 │   ├── gestures.test.mjs   Pruebas unitarias de gestos y estabilización del cursor
-│   └── signs.test.mjs      Pruebas unitarias del reconocimiento de señas y las palabras
+│   ├── signs.test.mjs      Pruebas unitarias del reconocimiento de señas y las palabras
+│   └── emoji.test.mjs      Pruebas unitarias de los gestos de emoji (una y dos manos, aplauso)
 ├── package.json
 └── README.md
 ```
@@ -147,7 +170,7 @@ camaraweb_deteccionmanos/
 npm test
 ```
 
-Ejecuta 46 pruebas unitarias (Node.js ≥ 18, sin dependencias): clasificación de gestos —incluida su invariancia a la rotación de la mano—, filtro de suavizado, rechazo de saltos bruscos, estabilizador de temblor, características invariantes a posición y tamaño, clasificador de señas (con rechazo de manos desconocidas), validación cruzada, formación de palabras (confirmación, repetición, espacio y borrado) y exportación/importación del entrenamiento.
+Ejecuta 81 pruebas unitarias (Node.js ≥ 18, sin dependencias): clasificación de gestos —incluida su invariancia a la rotación de la mano—, filtro de suavizado, rechazo de saltos bruscos, estabilizador de temblor, características invariantes a posición y tamaño, clasificador de señas (con rechazo de manos desconocidas), validación cruzada, formación de palabras (confirmación, repetición, espacio y borrado) exportación/importación del entrenamiento y reconocimiento de emojis (gestos de una mano, corazón, manos juntas, aplauso con y sin pérdida de detección, y rechazo de falsos aplausos).
 
 ## Consejos de uso y limitaciones
 

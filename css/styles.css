@@ -869,21 +869,24 @@ kbd {
 }
 
 /* Cada modo muestra solo sus propios paneles y herramientas */
-body[data-mode="draw"] .only-signs,
-body[data-mode="signs"] .only-draw {
+body:not([data-mode="draw"]) .only-draw,
+body:not([data-mode="signs"]) .only-signs,
+body:not([data-mode="emoji"]) .only-emoji {
   display: none !important;
 }
 
-.stage[data-mode="signs"] .dock,
-.stage[data-mode="signs"] .hud {
+.stage:not([data-mode="draw"]) .dock,
+.stage:not([data-mode="draw"]) .hud,
+.stage[data-mode="emoji"] .signbar,
+.stage:not([data-mode="emoji"]) .emojibar {
   display: none;
 }
 
-.stage[data-mode="signs"] #drawCanvas {
+.stage:not([data-mode="draw"]) #drawCanvas {
   opacity: 0; /* los trazos se conservan, pero no se ven en este modo */
 }
 
-.stage[data-mode="signs"] .toast {
+.stage:not([data-mode="draw"]) .toast {
   bottom: 118px;
 }
 
@@ -1249,13 +1252,13 @@ body[data-mode="signs"] .only-draw {
 }
 
 /* Pantalla de bienvenida: más compacta en escenarios pequeños y en modo Señas */
-.stage[data-mode="signs"] .empty-state {
+.stage:not([data-mode="draw"]) .empty-state {
   padding-top: 20px;
 }
 
 @media (max-width: 560px) {
   .empty-state,
-  .stage[data-mode="signs"] .empty-state {
+  .stage:not([data-mode="draw"]) .empty-state {
     padding: 12px;
   }
 
@@ -1267,5 +1270,136 @@ body[data-mode="signs"] .only-draw {
   .empty-card p:not(.error),
   .empty-card .privacy {
     display: none !important;
+  }
+}
+
+/* ------------------------------ Modo Emojis ------------------------------ */
+.stage[data-mode="emoji"]:has(.empty-state:not([hidden])) .emojibar {
+  display: none;
+}
+
+.emojibar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 10px 24px 10px 16px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.emojibar[data-on="true"] {
+  border-color: var(--accent-2);
+}
+
+.emojibar[data-on="false"] .emoji-big {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+
+.emoji-big {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.emoji-big.pop {
+  animation: emoji-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes emoji-pop {
+  0% {
+    transform: scale(0.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.emoji-text strong {
+  display: block;
+  font-size: 20px;
+}
+
+.emoji-text small,
+.emoji-live small,
+.emoji-guide small {
+  display: block;
+  color: var(--muted, #94a3b8);
+}
+
+.emoji-live {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.emoji-live-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.emoji-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+  margin-bottom: 10px;
+  font-size: 28px;
+}
+
+.emoji-history em {
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+}
+
+.emoji-guide h3 {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.emoji-guide ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.emoji-guide li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.eg-emoji {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+@media (max-width: 560px) {
+  .emojibar {
+    gap: 10px;
+    padding: 8px 14px 8px 10px;
+  }
+
+  .emoji-big {
+    font-size: 44px;
+  }
+
+  .emoji-text strong {
+    font-size: 16px;
   }
 }

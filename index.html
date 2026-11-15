@@ -10,7 +10,7 @@
     />
     <title>AirCanvas · Dibujo con gestos</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-    <link rel="stylesheet" href="css/styles.css?v=12" />
+    <link rel="stylesheet" href="css/styles.css?v=13" />
   </head>
 
   <body data-mode="draw">
@@ -44,6 +44,7 @@
         <div class="modes" id="modeTabs" role="tablist" aria-label="Modo de la aplicación">
           <button type="button" role="tab" id="tabDraw" data-mode="draw" aria-selected="true">✏️ Dibujo</button>
           <button type="button" role="tab" id="tabSigns" data-mode="signs" aria-selected="false">🤟 Señas (LSM)</button>
+          <button type="button" role="tab" id="tabEmoji" data-mode="emoji" aria-selected="false">😀 Emojis</button>
         </div>
 
         <div class="topbar-actions">
@@ -133,13 +134,24 @@
               </div>
             </div>
 
+            <!-- Modo Emojis: emoji que forman las manos -->
+            <div class="emojibar" id="emojiBar" data-on="false" hidden>
+              <span class="emoji-big" id="emojiBig" aria-hidden="true">🖐️</span>
+              <div class="emoji-text">
+                <strong id="emojiName">Haz un gesto frente a la cámara</strong>
+                <small id="emojiHint">Una o dos manos</small>
+              </div>
+            </div>
+
             <!-- Pantalla de bienvenida / errores -->
             <div class="empty-state" id="emptyState">
               <div class="empty-card">
                 <div class="empty-badge only-draw" aria-hidden="true">☝️</div>
                 <div class="empty-badge only-signs" aria-hidden="true">🤟</div>
+                <div class="empty-badge only-emoji" aria-hidden="true">😀</div>
                 <h2 class="only-draw">Dibuja en el aire</h2>
                 <h2 class="only-signs">Forma palabras con señas</h2>
+                <h2 class="only-emoji">Gestos que se vuelven emojis</h2>
                 <p class="only-draw">
                   Activa tu cámara y traza con la punta de tu dedo índice. Elige colores y grosores
                   de pincel, y borra con la palma abierta.
@@ -147,6 +159,10 @@
                 <p class="only-signs">
                   Activa tu cámara, entrena las señas del alfabeto en el panel «Entrenamiento» y mantén
                   cada seña 1 segundo para ir formando la palabra.
+                </p>
+                <p class="only-emoji">
+                  Activa tu cámara y haz un gesto con una o dos manos: pulgar arriba o abajo, paz, OK,
+                  un corazón con ambas manos, palmas… y el emoji aparecerá en pantalla.
                 </p>
                 <p class="error" id="errorText" role="alert" hidden></p>
                 <button type="button" class="btn btn-primary btn-lg" id="btnStart">
@@ -168,6 +184,37 @@
 
         <!-- =========================== PANEL LATERAL =========================== -->
         <aside class="panel" aria-label="Panel de control">
+          <!-- ============ Modo Emojis ============ -->
+          <section class="card only-emoji" aria-labelledby="h-emoji">
+            <h2 id="h-emoji">Emoji detectado</h2>
+            <div class="emoji-live">
+              <span class="emoji-live-icon" id="emojiLive">–</span>
+              <div>
+                <strong id="emojiLiveName">Sin gesto reconocido</strong>
+                <small id="emojiLiveHow"></small>
+              </div>
+            </div>
+            <small class="muted" id="emojiHands" aria-live="polite">Manos detectadas: 0</small>
+          </section>
+
+          <section class="card only-emoji" aria-labelledby="h-emoji-hist">
+            <h2 id="h-emoji-hist">Historial</h2>
+            <div class="emoji-history" id="emojiHistory" aria-live="polite"></div>
+            <div class="btn-row">
+              <button type="button" class="btn" id="btnEmojiCopy">Copiar</button>
+              <button type="button" class="btn" id="btnEmojiClear">Borrar</button>
+            </div>
+          </section>
+
+          <section class="card only-emoji" aria-labelledby="h-emoji-guide">
+            <h2 id="h-emoji-guide">Guía de gestos</h2>
+            <div class="emoji-guide" id="emojiGuide"></div>
+            <small class="muted">
+              Reglas geométricas aproximadas: la iluminación, el ángulo y el tamaño de la mano influyen.
+              Mantenga el gesto unos 0.4 s.
+            </small>
+          </section>
+
           <!-- ============ Modo Señas (LSM) ============ -->
           <section class="card only-signs" aria-labelledby="h-word">
             <h2 id="h-word">Palabra formada</h2>
@@ -308,6 +355,6 @@
       </main>
     </div>
 
-    <script type="module" src="js/app.js?v=12"></script>
+    <script type="module" src="js/app.js?v=13"></script>
   </body>
 </html>

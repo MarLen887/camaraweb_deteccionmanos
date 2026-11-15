@@ -23,8 +23,9 @@ import {
   classifyGesture,
   fingertip,
   palmCenter,
-} from "./gestures.js?v=12";
-import { createSignsUI } from "./signs-ui.js?v=12";
+} from "./gestures.js?v=13";
+import { createSignsUI } from "./signs-ui.js?v=13";
+import { createEmojiUI } from "./emoji-ui.js?v=13";
 
 /* ========================================================================== */
 /*  Configuración                                                              */
@@ -162,6 +163,12 @@ const signs = createSignsUI({
   isCameraRunning: () => state.running,
 });
 
+/** Modo "Emojis": gestos de una o dos manos → emoji (ver emoji-ui.js). */
+const emojis = createEmojiUI({
+  showToast: (msg, ms) => showToast(msg, ms),
+  isCameraRunning: () => state.running,
+});
+
 /* ========================================================================== */
 /*  Estado                                                                     */
 /* ========================================================================== */
@@ -181,7 +188,7 @@ const state = {
   tool: "draw", // "draw" | "erase" (borrador seleccionado manualmente)
   bg: "camera", // "camera" | "light" | "dark"
   showSkeleton: false,
-  mode: "draw", // "draw" | "signs"
+  mode: "draw", // "draw" | "signs" | "emoji"
 
   strokes: [], // Trazos con puntos normalizados [0..1] (independientes de la resolución)
   backup: null, // Trazos previos a "Limpiar", para poder restaurarlos
@@ -648,6 +655,16 @@ function maybeShowDistanceHint(nowMs) {
 }
 
 function processFrame(result, nowMs) {
+  if (state.mode === "emoji") {
+    // Hasta dos manos, en píxeles y vista espejo
+    const { w, h } = state.size;
+    const hands = (result?.landmarks ?? []).map((lm) => lm.map((p) => ({ x: (1 - p.x) * w, y: p.y * h })));
+    if (hands.length) state.lastSeen = nowMs;
+    emojis.processHands(hands, nowMs);
+    octx.clearRect(0, 0, w, h);
+    for (const pts of hands) drawSkeleton(pts);
+    return;
+  }
   const landmarks = result?.landmarks?.[0];
   if (!landmarks) {
     if (state.mode === "signs") {
@@ -794,9 +811,16 @@ function setMode(mode) {
   el.stage.dataset.mode = mode;
   el.modeTabs.forEach((btn) => btn.setAttribute("aria-selected", String(btn.dataset.mode === mode)));
   signs.setActive(mode === "signs");
+  emojis.setActive(mode === "emoji");
+  // Dos manos solo se detectan en el modo Emojis (en los demás se mantiene 1 por rendimiento)
+  try {
+    state.landmarker?.setOptions({ numHands: mode === "emoji" ? 2 : 1 });
+  } catch (err) {
+    console.warn("No se pudo cambiar numHands", err);
+  }
   octx.clearRect(0, 0, state.size.w, state.size.h);
   updateGestureUI(state.running ? "nohand" : "idle");
-  showToast(mode === "signs" ? "Modo Señas (LSM)" : "Modo Dibujo");
+  showToast({ signs: "Modo Señas (LSM)", emoji: "Modo Emojis", draw: "Modo Dibujo" }[mode]);
 }
 
 function drawSkeleton(pts) {
@@ -987,7 +1011,7 @@ async function loadLandmarker() {
     vision.HandLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: MODEL_URL, delegate },
       runningMode: "VIDEO",
-      numHands: 1,
+      numHands: state.mode === "emoji" ? 2 : 1,
       minHandDetectionConfidence: DETECTION_CONFIDENCE,
       minHandPresenceConfidence: DETECTION_CONFIDENCE,
       minTrackingConfidence: DETECTION_CONFIDENCE,
@@ -1086,6 +1110,7 @@ function stopCamera({ keepStatus = false } = {}) {
   clearDwell();
   resetCursorTracking();
   signs.reset();
+  emojis.reset();
   Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, lastSeen: 0, cursor: null });
   octx.clearRect(0, 0, state.size.w, state.size.h);
 
@@ -1166,8 +1191,8 @@ function bindEvents() {
 
   window.addEventListener("keydown", (event) => {
     const key = event.key?.toLowerCase() ?? "";
-    if (state.mode === "signs") {
-      // En el modo Señas los atajos de dibujo no aplican
+    if (state.mode !== "draw") {
+      // Fuera del modo Dibujo los atajos de dibujo no aplican
       if (key === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) toggleFullscreen();
       return;
     }
