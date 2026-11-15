@@ -57,7 +57,9 @@ const BRUSHES = [
 
 const REF_SIZE = 1280; // Resolución de referencia para escalar los grosores.
 const STABLE_FRAMES = 3; // Fotogramas consecutivos para aceptar un cambio de gesto.
-const LOST_FRAMES = 6; // Fotogramas sin mano para considerarla perdida.
+const LEAVE_FRAMES = 5; // Fotogramas para SALIR de dibujar/borrar (más tolerante: evita cortes por parpadeo).
+const HAND_LOST_MS = 450; // Tiempo sin mano antes de cortar el trazo; si reaparece antes, el trazo continúa.
+const DETECTION_CONFIDENCE = 0.4; // Umbral de MediaPipe: más bajo = mayor alcance (mano en bordes, giros).
 const DWELL_MS = 800; // Tiempo de permanencia para activar un botón con gestos.
 const MIN_POINT_DISTANCE = 1.5; // Distancia mínima (px) entre puntos de un trazo.
 const DEFAULT_COLOR = 7; // Azul
@@ -174,7 +176,7 @@ const state = {
   gesture: null, // Gesto aceptado (estable)
   candidate: null, // Gesto candidato (aún sin estabilizar)
   candidateFrames: 0,
-  lostFrames: 0,
+  lastSeen: 0, // Instante (ms) del último fotograma con mano detectada
   cursor: null, // Punto suavizado en píxeles del lienzo
   viaGesture: false, // true mientras un botón se activa por gestos
 
@@ -587,9 +589,9 @@ function setGesture(next) {
   updateGestureUI(next);
 }
 
-function handleHandLost() {
-  state.lostFrames++;
-  if (state.lostFrames < LOST_FRAMES || state.gesture === null) return;
+function handleHandLost(nowMs) {
+  // Se concede un margen: si la mano reaparece pronto, el trazo sigue sin cortarse.
+  if (state.gesture === null || nowMs - state.lastSeen < HAND_LOST_MS) return;
 
   endStroke();
   clearDwell();
@@ -605,11 +607,11 @@ function handleHandLost() {
 function processFrame(result, nowMs) {
   const landmarks = result?.landmarks?.[0];
   if (!landmarks) {
-    handleHandLost();
+    handleHandLost(nowMs);
     renderOverlay(null);
     return;
   }
-  state.lostFrames = 0;
+  state.lastSeen = nowMs;
 
   // Vista espejo: X invertida; coordenadas en píxeles (escala isotrópica).
   const { w, h } = state.size;
@@ -623,12 +625,20 @@ function processFrame(result, nowMs) {
     state.candidate = raw;
     state.candidateFrames = 1;
   }
-  if (raw !== state.gesture && state.candidateFrames >= STABLE_FRAMES) setGesture(raw);
+  // Histéresis: entrar a un gesto exige STABLE_FRAMES; salir de dibujar/borrar exige más.
+  const needed =
+    state.gesture === GESTURE.DRAW || state.gesture === GESTURE.ERASE ? LEAVE_FRAMES : STABLE_FRAMES;
+  if (raw !== state.gesture && state.candidateFrames >= needed) setGesture(raw);
 
   // Punto de trabajo suavizado
   const anchor = state.gesture === GESTURE.ERASE ? palmCenter(pts) : fingertip(pts);
   const t = nowMs / 1000;
-  state.cursor = { x: filterX.filter(anchor.x, t), y: filterY.filter(anchor.y, t) };
+  // Se limita al lienzo: con la mano en el borde, MediaPipe puede estimar puntos fuera del cuadro.
+  const clamp = (v, max) => Math.min(Math.max(v, 0), max);
+  state.cursor = {
+    x: clamp(filterX.filter(anchor.x, t), w),
+    y: clamp(filterY.filter(anchor.y, t), h),
+  };
 
   // Solo se traza cuando el fotograma coincide con el gesto aceptado: durante
   // las transiciones se "congela" el trazo para evitar garabatos al cambiar de gesto.
@@ -792,9 +802,9 @@ async function loadLandmarker() {
       baseOptions: { modelAssetPath: MODEL_URL, delegate },
       runningMode: "VIDEO",
       numHands: 1,
-      minHandDetectionConfidence: 0.6,
-      minHandPresenceConfidence: 0.6,
-      minTrackingConfidence: 0.6,
+      minHandDetectionConfidence: DETECTION_CONFIDENCE,
+      minHandPresenceConfidence: DETECTION_CONFIDENCE,
+      minTrackingConfidence: DETECTION_CONFIDENCE,
     });
 
   try {
@@ -889,7 +899,7 @@ function stopCamera({ keepStatus = false } = {}) {
   clearDwell();
   filterX.reset();
   filterY.reset();
-  Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, lostFrames: 0, cursor: null });
+  Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, lastSeen: 0, cursor: null });
   octx.clearRect(0, 0, state.size.w, state.size.h);
 
   el.hud.hidden = true;
