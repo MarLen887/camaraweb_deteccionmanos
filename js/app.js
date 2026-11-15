@@ -165,7 +165,7 @@ const state = {
   brushIndex: DEFAULT_BRUSH,
   tool: "draw", // "draw" | "erase" (borrador seleccionado manualmente)
   bg: "camera", // "camera" | "light" | "dark"
-  showSkeleton: true,
+  showSkeleton: false,
 
   strokes: [], // Trazos con puntos normalizados [0..1] (independientes de la resolución)
   backup: null, // Trazos previos a "Limpiar", para poder restaurarlos
