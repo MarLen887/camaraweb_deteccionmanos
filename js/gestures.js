@@ -213,3 +213,82 @@ export class OneEuroFilter {
     this.previousRaw = null;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Rechazo de saltos bruscos (valores atípicos de seguimiento)                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Descarta saltos de posición físicamente implausibles entre fotogramas.
+ *
+ * El seguimiento de la mano puede producir, durante uno o varios fotogramas,
+ * una posición errónea de la punta del dedo (p. ej., por desenfoque o por un
+ * dedo escorzado) que luego "regresa" a su sitio. Los filtros de suavizado no
+ * lo corrigen porque, al ser un cambio rápido, los diseñados para seguir el
+ * movimiento lo dejan pasar.
+ *
+ * Mientras un punto exceda el límite de desplazamiento, se mantiene la última
+ * posición válida. Si el punto nuevo persiste de forma consistente durante
+ * `confirmFrames` fotogramas, se considera un desplazamiento real y se acepta.
+ */
+export class JumpRejector {
+  /**
+   * @param {object} [options]
+   * @param {number} [options.confirmFrames=4] Fotogramas consecutivos y coherentes para aceptar un salto.
+   * @param {number} [options.frameMs=33.3] Duración nominal de un fotograma (ms).
+   * @param {number} [options.maxFrameScale=3] Máximo de fotogramas nominales que amplían el límite si hubo retraso.
+   */
+  constructor({ confirmFrames = 4, frameMs = 1000 / 30, maxFrameScale = 3 } = {}) {
+    this.confirmFrames = confirmFrames;
+    this.frameMs = frameMs;
+    this.maxFrameScale = maxFrameScale;
+    this.reset();
+  }
+
+  /** Olvida el estado (p. ej., al perder la mano o cambiar de gesto). */
+  reset() {
+    this.last = null; // Última posición aceptada
+    this.pending = null; // Posición candidata tras un salto
+    this.count = 0; // Fotogramas coherentes con la candidata
+    this.time = null; // Instante del fotograma anterior (ms)
+  }
+
+  /**
+   * @param {{x:number,y:number}} p Posición medida.
+   * @param {number} t Instante de la medición (ms).
+   * @param {number} limit Desplazamiento máximo plausible por fotograma nominal (px).
+   * @returns {{x:number,y:number}} Posición aceptada (la medida o la última válida).
+   */
+  filter(p, t, limit) {
+    if (!this.last) {
+      this.last = p;
+      this.time = t;
+      return p;
+    }
+
+    // Si hubo retraso entre fotogramas, el desplazamiento plausible es mayor.
+    const frames = Math.min(Math.max((t - this.time) / this.frameMs, 1), this.maxFrameScale);
+    this.time = t;
+
+    if (Math.hypot(p.x - this.last.x, p.y - this.last.y) <= limit * frames) {
+      this.last = p;
+      this.pending = null;
+      this.count = 0;
+      return p;
+    }
+
+    // Salto sospechoso: se cuenta cuántos fotogramas seguidos coinciden en el nuevo sitio.
+    const coherent =
+      this.pending && Math.hypot(p.x - this.pending.x, p.y - this.pending.y) <= limit * frames;
+    this.count = coherent ? this.count + 1 : 1;
+    this.pending = p;
+
+    if (this.count >= this.confirmFrames) {
+      this.last = p;
+      this.pending = null;
+      this.count = 0;
+      return p;
+    }
+    return this.last;
+  }
+}

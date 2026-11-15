@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   GESTURE,
+  JumpRejector,
   OneEuroFilter,
   classifyGesture,
   fingerStates,
@@ -122,4 +123,64 @@ test("filtro 1€: reset() permite reiniciar sin arrastrar el valor anterior", (
   filter.filter(12, 0.033);
   filter.reset();
   assert.equal(filter.filter(300, 1), 300);
+});
+
+/* ---------------------------- JumpRejector ---------------------------- */
+
+const FRAME_MS = 1000 / 30;
+const LIMIT = 100; // px por fotograma
+
+test("rechazo de saltos: el movimiento normal pasa sin cambios", () => {
+  const gate = new JumpRejector();
+  for (let i = 0; i < 30; i++) {
+    const p = { x: 100 + i * 20, y: 200 };
+    assert.deepEqual(gate.filter(p, i * FRAME_MS, LIMIT), p);
+  }
+});
+
+test("rechazo de saltos: un pico de 1 fotograma se descarta y se conserva la línea", () => {
+  const gate = new JumpRejector();
+  const out = [];
+  for (let i = 0; i < 20; i++) {
+    const spike = i === 10 ? 250 : 0; // salto brusco a la derecha
+    out.push(gate.filter({ x: 100 + i * 5 + spike, y: 300 }, i * FRAME_MS, LIMIT));
+  }
+  assert.ok(out.every((p) => p.x < 100 + 20 * 5), "ninguna salida debe desviarse a la derecha");
+  assert.equal(out[10].x, out[9].x, "durante el pico se mantiene la última posición válida");
+  assert.equal(out[11].x, 100 + 11 * 5, "después del pico se retoma la línea original");
+});
+
+test("rechazo de saltos: un pico de 3 fotogramas también se descarta", () => {
+  const gate = new JumpRejector({ confirmFrames: 4 });
+  const out = [];
+  for (let i = 0; i < 20; i++) {
+    const spike = i >= 8 && i <= 10 ? 250 : 0;
+    out.push(gate.filter({ x: 100 + i * 5 + spike, y: 300 }, i * FRAME_MS, LIMIT));
+  }
+  assert.ok(out.every((p) => p.x <= 100 + 19 * 5), "el pico no debe aparecer en la salida");
+});
+
+test("rechazo de saltos: un desplazamiento real y sostenido se acepta tras confirmFrames", () => {
+  const gate = new JumpRejector({ confirmFrames: 4 });
+  for (let i = 0; i < 5; i++) gate.filter({ x: 100, y: 100 }, i * FRAME_MS, LIMIT);
+  const out = [];
+  for (let i = 5; i < 12; i++) out.push(gate.filter({ x: 600, y: 100 }, i * FRAME_MS, LIMIT));
+  assert.equal(out[0].x, 100, "al inicio se mantiene la posición anterior");
+  assert.equal(out[2].x, 100);
+  assert.equal(out[3].x, 600, "al 4.º fotograma coherente se acepta el nuevo sitio");
+  assert.equal(out[6].x, 600);
+});
+
+test("rechazo de saltos: tras un retraso entre fotogramas el límite se amplía", () => {
+  const gate = new JumpRejector();
+  gate.filter({ x: 0, y: 0 }, 0, LIMIT);
+  // 3 fotogramas de retraso → se permiten hasta 300 px
+  assert.deepEqual(gate.filter({ x: 250, y: 0 }, 3 * FRAME_MS, LIMIT), { x: 250, y: 0 });
+});
+
+test("rechazo de saltos: reset() acepta de inmediato cualquier posición", () => {
+  const gate = new JumpRejector();
+  gate.filter({ x: 0, y: 0 }, 0, LIMIT);
+  gate.reset();
+  assert.deepEqual(gate.filter({ x: 900, y: 500 }, 10 * FRAME_MS, LIMIT), { x: 900, y: 500 });
 });

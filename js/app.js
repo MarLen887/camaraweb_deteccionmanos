@@ -17,11 +17,12 @@
 import {
   GESTURE,
   HAND_CONNECTIONS,
+  JumpRejector,
   OneEuroFilter,
   classifyGesture,
   fingertip,
   palmCenter,
-} from "./gestures.js?v=8";
+} from "./gestures.js?v=9";
 
 /* ========================================================================== */
 /*  Configuración                                                              */
@@ -60,7 +61,9 @@ const STABLE_FRAMES = 3; // Fotogramas consecutivos para aceptar un cambio de ge
 const LEAVE_FRAMES = 5; // Fotogramas para SALIR de dibujar/borrar (más tolerante: evita cortes por parpadeo).
 const HAND_LOST_MS = 450; // Tiempo sin mano antes de cortar el trazo; si reaparece antes, el trazo continúa.
 const NO_HAND_HINT_MS = 2000; // Tiempo sin mano tras el cual se muestra la sugerencia de distancia.
-const DETECTION_CONFIDENCE = 0.4; // Umbral de MediaPipe: más bajo = mayor alcance (mano en bordes, giros).
+const DETECTION_CONFIDENCE = 0.5; // Umbral de MediaPipe (valor por defecto): menor = más alcance, pero más "saltos".
+const JUMP_RATIO = 0.08; // Desplazamiento máximo plausible por fotograma, como fracción del lado mayor del lienzo.
+const JUMP_CONFIRM_FRAMES = 4; // Fotogramas coherentes para aceptar un desplazamiento brusco como real.
 const DWELL_MS = 800; // Tiempo de permanencia para activar un botón con gestos.
 const MIN_POINT_DISTANCE = 1.5; // Distancia mínima (px) entre puntos de un trazo.
 const DEFAULT_COLOR = 7; // Azul
@@ -187,6 +190,14 @@ const state = {
 
 const filterX = new OneEuroFilter({ minCutoff: 1.35, beta: 0.02, dCutoff: 1 });
 const filterY = new OneEuroFilter({ minCutoff: 1.35, beta: 0.02, dCutoff: 1 });
+const jumpGate = new JumpRejector({ confirmFrames: JUMP_CONFIRM_FRAMES });
+
+/** Reinicia todo el seguimiento del cursor (filtros y rechazo de saltos). */
+function resetCursorTracking() {
+  filterX.reset();
+  filterY.reset();
+  jumpGate.reset();
+}
 
 /** Factor de escala de grosores respecto a la resolución de referencia. */
 const scale = () => Math.max(state.size.w, state.size.h) / REF_SIZE;
@@ -587,8 +598,7 @@ function setGesture(next) {
   if (state.gesture === next) return;
   endStroke();
   state.gesture = next;
-  filterX.reset(); // El punto de anclaje cambia (índice ↔ palma): se reinicia el filtro
-  filterY.reset();
+  resetCursorTracking(); // El punto de anclaje cambia (índice ↔ palma): se reinicia el seguimiento
   updateGestureUI(next);
 }
 
@@ -598,8 +608,7 @@ function handleHandLost(nowMs) {
 
   endStroke();
   clearDwell();
-  filterX.reset();
-  filterY.reset();
+  resetCursorTracking();
   state.gesture = null;
   state.candidate = null;
   state.candidateFrames = 0;
@@ -651,7 +660,9 @@ function processFrame(result, nowMs) {
   if (raw !== state.gesture && state.candidateFrames >= needed) setGesture(raw);
 
   // Punto de trabajo suavizado
-  const anchor = state.gesture === GESTURE.ERASE ? palmCenter(pts) : fingertip(pts);
+  // Los saltos bruscos de un solo fotograma (errores de seguimiento) se descartan antes de suavizar.
+  const measured = state.gesture === GESTURE.ERASE ? palmCenter(pts) : fingertip(pts);
+  const anchor = jumpGate.filter(measured, nowMs, JUMP_RATIO * Math.max(w, h));
   const t = nowMs / 1000;
   // Se limita al lienzo: con la mano en el borde, MediaPipe puede estimar puntos fuera del cuadro.
   const clamp = (v, max) => Math.min(Math.max(v, 0), max);
@@ -969,8 +980,7 @@ function stopCamera({ keepStatus = false } = {}) {
 
   endStroke();
   clearDwell();
-  filterX.reset();
-  filterY.reset();
+  resetCursorTracking();
   Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, lastSeen: 0, cursor: null });
   octx.clearRect(0, 0, state.size.w, state.size.h);
 

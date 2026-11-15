@@ -100,8 +100,9 @@ camaraweb_deteccionmanos/
 2. **Detección.** En cada fotograma nuevo, `HandLandmarker.detectForVideo()` devuelve 21 puntos por mano. Se intenta usar el delegado GPU y, si no está disponible, se recurre a CPU.
 3. **Clasificación.** Un dedo se considera extendido si la razón *distancia muñeca→punta / distancia muñeca→articulación PIP* supera 1.2. Al basarse en distancias, el resultado no depende de la orientación de la mano.
 4. **Estabilización.** Un gesto nuevo debe mantenerse 3 fotogramas consecutivos para ser aceptado, y durante las transiciones el trazo se congela, evitando garabatos al cambiar de seña.
-5. **Suavizado.** La posición del dedo (o del centro de la palma al borrar) pasa por un filtro 1€, que suaviza intensamente a baja velocidad y poco a alta velocidad.
-6. **Dibujo.** Los trazos se almacenan con coordenadas normalizadas, por lo que son independientes de la resolución; esto permite deshacer, restaurar y redibujar sin pérdida de calidad.
+5. **Rechazo de saltos.** Si la posición del dedo se desplaza de forma implausible en un fotograma (más del 8 % del lado mayor del lienzo) se conserva la última posición válida, y solo se acepta el nuevo sitio si persiste 4 fotogramas seguidos. Así se descartan los errores puntuales de seguimiento.
+6. **Suavizado.** La posición del dedo (o del centro de la palma al borrar) pasa por un filtro 1€, que suaviza intensamente a baja velocidad y poco a alta velocidad.
+7. **Dibujo.** Los trazos se almacenan con coordenadas normalizadas, por lo que son independientes de la resolución; esto permite deshacer, restaurar y redibujar sin pérdida de calidad.
 
 ## Pruebas
 
@@ -109,7 +110,7 @@ camaraweb_deteccionmanos/
 npm test
 ```
 
-Ejecuta 11 pruebas unitarias (Node.js ≥ 18, sin dependencias) sobre la clasificación de gestos —incluida su invariancia a la rotación de la mano— y el comportamiento del filtro de suavizado.
+Ejecuta 17 pruebas unitarias (Node.js ≥ 18, sin dependencias) sobre la clasificación de gestos —incluida su invariancia a la rotación de la mano— el comportamiento del filtro de suavizado y el rechazo de saltos bruscos.
 
 ## Consejos de uso y limitaciones
 
