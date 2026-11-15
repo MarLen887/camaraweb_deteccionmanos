@@ -1,0 +1,15 @@
+{
+  "name": "camaraweb-deteccionmanos",
+  "version": "1.0.0",
+  "description": "AirCanvas: aplicación web para dibujar con gestos de la mano frente a la cámara web (MediaPipe Hand Landmarker).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MarLen887/camaraweb_deteccionmanos.git"
+  }
+}
