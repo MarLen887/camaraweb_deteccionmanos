@@ -662,7 +662,7 @@ function processFrame(result, nowMs) {
     if (hands.length) state.lastSeen = nowMs;
     emojis.processHands(hands, nowMs);
     octx.clearRect(0, 0, w, h);
-    for (const pts of hands) drawSkeleton(pts);
+    if (state.showSkeleton) for (const pts of hands) drawSkeleton(pts); // oculto por defecto
     return;
   }
   const landmarks = result?.landmarks?.[0];

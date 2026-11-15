@@ -25,6 +25,7 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
     btnClear: $("btnEmojiClear"),
     btnCopy: $("btnEmojiCopy"),
     guide: $("emojiGuide"),
+    burst: $("emojiBurst"),
   };
 
   const detector = new EmojiDetector();
@@ -62,6 +63,37 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
     el.liveHow.textContent = e ? e.how : "Muestre una o dos manos completas, a unos 40–80 cm de la cámara.";
   }
 
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /**
+   * Explosión de reacciones tipo videollamada: los emojis nacen en la parte
+   * inferior, suben con vaivén, giran y se desvanecen.
+   */
+  function spawnBurst(key, count) {
+    const symbol = EMOJIS[key]?.emoji;
+    if (!symbol || !el.burst) return;
+    const n = reduceMotion ? Math.ceil(count / 4) : count;
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement("span");
+      p.className = "emoji-particle";
+      p.textContent = symbol;
+      p.style.setProperty("--x", `${rand(4, 96).toFixed(1)}%`);
+      p.style.setProperty("--size", `${rand(28, 72).toFixed(0)}px`);
+      p.style.setProperty("--rise", rand(60, 105).toFixed(0));
+      p.style.setProperty("--sway", `${rand(-60, 60).toFixed(0)}px`);
+      p.style.setProperty("--rot", `${rand(-40, 40).toFixed(0)}deg`);
+      p.style.animationDuration = `${rand(1.8, 3.2).toFixed(2)}s`;
+      p.style.animationDelay = `${rand(0, 0.45).toFixed(2)}s`;
+      p.addEventListener("animationend", () => p.remove(), { once: true });
+      el.burst.appendChild(p);
+    }
+    // Límite de partículas simultáneas (rendimiento)
+    while (el.burst.childElementCount > 120) el.burst.firstElementChild.remove();
+  }
+
+  let lastTrickle = 0;
+
   function setCurrent(key) {
     if (key === current) return;
     current = key;
@@ -80,11 +112,18 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
     overlay = { hands: hands.length };
     el.handsInfo.textContent = `Manos detectadas: ${hands.length}`;
     if (r.activated) {
+      spawnBurst(r.activated, 26);
+      lastTrickle = now;
       history.push(r.activated);
       if (history.length > HISTORY_MAX) history.shift();
       renderHistory();
     }
     setCurrent(r.active);
+    // Mientras se mantiene el gesto, siguen cayendo emojis (como al sostener una reacción)
+    if (r.active && !r.activated && now - lastTrickle > 600) {
+      spawnBurst(r.active, 5);
+      lastTrickle = now;
+    }
   }
 
   function processNoHand(now) {
@@ -121,6 +160,7 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
     /** Reinicia el seguimiento (conserva el historial). */
     reset() {
       detector.reset();
+      el.burst?.replaceChildren();
       overlay = null;
       current = null;
       render();

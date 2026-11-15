@@ -1403,3 +1403,47 @@ body:not([data-mode="emoji"]) .only-emoji {
     font-size: 16px;
   }
 }
+
+/* Lluvia de emojis (reacciones) */
+.emoji-burst {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: hidden;
+  pointer-events: none;
+  container-type: size;
+}
+
+.stage:not([data-mode="emoji"]) .emoji-burst {
+  display: none;
+}
+
+.emoji-particle {
+  position: absolute;
+  bottom: -12%;
+  left: var(--x);
+  font-size: var(--size);
+  line-height: 1;
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+  animation: emoji-rise 2.4s ease-out forwards;
+}
+
+@keyframes emoji-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3) rotate(0deg);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(calc(var(--sway) * 0.2), -8%) scale(1.15) rotate(calc(var(--rot) * 0.3));
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--sway), calc(var(--rise) * -1cqh)) scale(0.9) rotate(var(--rot));
+  }
+}
