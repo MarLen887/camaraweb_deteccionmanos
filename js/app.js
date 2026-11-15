@@ -23,7 +23,8 @@ import {
   classifyGesture,
   fingertip,
   palmCenter,
-} from "./gestures.js?v=10";
+} from "./gestures.js?v=12";
+import { createSignsUI } from "./signs-ui.js?v=12";
 
 /* ========================================================================== */
 /*  Configuración                                                              */
@@ -149,10 +150,17 @@ const el = {
   smoothOut: $("smoothOut"),
   chkSkeleton: $("chkSkeleton"),
   toast: $("toast"),
+  modeTabs: document.querySelectorAll("#modeTabs [data-mode]"),
 };
 
 const dctx = el.drawCanvas.getContext("2d");
 const octx = el.overlayCanvas.getContext("2d");
+
+/** Modo "Señas (LSM)": reconocimiento del alfabeto y formación de palabras (ver signs-ui.js). */
+const signs = createSignsUI({
+  showToast: (msg, ms) => showToast(msg, ms),
+  isCameraRunning: () => state.running,
+});
 
 /* ========================================================================== */
 /*  Estado                                                                     */
@@ -173,6 +181,7 @@ const state = {
   tool: "draw", // "draw" | "erase" (borrador seleccionado manualmente)
   bg: "camera", // "camera" | "light" | "dark"
   showSkeleton: false,
+  mode: "draw", // "draw" | "signs"
 
   strokes: [], // Trazos con puntos normalizados [0..1] (independientes de la resolución)
   backup: null, // Trazos previos a "Limpiar", para poder restaurarlos
@@ -641,6 +650,11 @@ function maybeShowDistanceHint(nowMs) {
 function processFrame(result, nowMs) {
   const landmarks = result?.landmarks?.[0];
   if (!landmarks) {
+    if (state.mode === "signs") {
+      signs.processNoHand(nowMs);
+      renderOverlay(null);
+      return;
+    }
     handleHandLost(nowMs);
     maybeShowDistanceHint(nowMs);
     renderOverlay(null);
@@ -651,6 +665,16 @@ function processFrame(result, nowMs) {
   // Vista espejo: X invertida; coordenadas en píxeles (escala isotrópica).
   const { w, h } = state.size;
   const pts = landmarks.map((p) => ({ x: (1 - p.x) * w, y: p.y * h }));
+
+  if (state.mode === "signs") {
+    // z de MediaPipe usa aproximadamente la misma escala que x (normalizada por el ancho)
+    signs.processHand(
+      landmarks.map((p) => ({ x: (1 - p.x) * w, y: p.y * h, z: p.z * w })),
+      nowMs,
+    );
+    renderOverlay(pts);
+    return;
+  }
 
   // Estabilización del gesto (anti-parpadeo)
   const raw = classifyGesture(pts);
@@ -699,8 +723,80 @@ function processFrame(result, nowMs) {
 function renderOverlay(pts) {
   octx.clearRect(0, 0, state.size.w, state.size.h);
   if (!pts) return;
+  if (state.mode === "signs") {
+    drawSkeleton(pts); // en este modo el esqueleto ayuda a ver qué detecta el sistema
+    drawSignTag(pts);
+    return;
+  }
   if (state.showSkeleton) drawSkeleton(pts);
   if (state.cursor) drawCursor(state.cursor);
+}
+
+/** Recuadro alrededor de la mano con la letra reconocida y su confianza. */
+function drawSignTag(pts) {
+  const info = signs.getOverlay();
+  const s = scale();
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  const pad = 14 * s;
+  const x = minX - pad;
+  const y = minY - pad;
+  const w = maxX - minX + pad * 2;
+  const h = maxY - minY + pad * 2;
+  const recognized = Boolean(info?.label);
+
+  octx.save();
+  octx.lineWidth = 3 * s;
+  octx.setLineDash(recognized ? [] : [8 * s, 6 * s]);
+  octx.strokeStyle = recognized ? "#22d3ee" : "rgba(255, 255, 255, 0.55)";
+  octx.beginPath();
+  if (octx.roundRect) octx.roundRect(x, y, w, h, 14 * s);
+  else octx.rect(x, y, w, h);
+  octx.stroke();
+
+  if (recognized) {
+    const text = `${signs.symbolFor(info.label)}  ${Math.round(info.confidence * 100)} %`;
+    octx.font = `800 ${26 * s}px ${getComputedStyle(document.body).fontFamily}`;
+    octx.textBaseline = "middle";
+    const chipW = octx.measureText(text).width + 24 * s;
+    const chipH = 40 * s;
+    const cx = Math.min(Math.max(x, 4 * s), state.size.w - chipW - 4 * s);
+    const cy = Math.max(4 * s, y - chipH - 6 * s);
+    octx.setLineDash([]);
+    octx.fillStyle = "#22d3ee";
+    octx.beginPath();
+    if (octx.roundRect) octx.roundRect(cx, cy, chipW, chipH, 12 * s);
+    else octx.rect(cx, cy, chipW, chipH);
+    octx.fill();
+    octx.fillStyle = "#04121a";
+    octx.fillText(text, cx + 12 * s, cy + chipH / 2 + 1 * s);
+  }
+  octx.restore();
+}
+
+/** Cambia entre el modo Dibujo y el modo Señas (la cámara sigue encendida). */
+function setMode(mode) {
+  if (state.mode === mode) return;
+  endStroke();
+  clearDwell();
+  resetCursorTracking();
+  Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, cursor: null });
+  state.mode = mode;
+  document.body.dataset.mode = mode;
+  el.stage.dataset.mode = mode;
+  el.modeTabs.forEach((btn) => btn.setAttribute("aria-selected", String(btn.dataset.mode === mode)));
+  signs.setActive(mode === "signs");
+  octx.clearRect(0, 0, state.size.w, state.size.h);
+  updateGestureUI(state.running ? "nohand" : "idle");
+  showToast(mode === "signs" ? "Modo Señas (LSM)" : "Modo Dibujo");
 }
 
 function drawSkeleton(pts) {
@@ -989,6 +1085,7 @@ function stopCamera({ keepStatus = false } = {}) {
   endStroke();
   clearDwell();
   resetCursorTracking();
+  signs.reset();
   Object.assign(state, { gesture: null, candidate: null, candidateFrames: 0, lastSeen: 0, cursor: null });
   octx.clearRect(0, 0, state.size.w, state.size.h);
 
@@ -1044,6 +1141,8 @@ function bindEvents() {
   el.btnCamera.addEventListener("click", toggleCamera);
   el.btnStart.addEventListener("click", startCamera);
 
+  el.modeTabs.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+
   el.btnEraser.addEventListener("click", toggleEraser);
   el.btnUndo.addEventListener("click", undo);
   el.btnClear.addEventListener("click", clearAll);
@@ -1067,6 +1166,11 @@ function bindEvents() {
 
   window.addEventListener("keydown", (event) => {
     const key = event.key?.toLowerCase() ?? "";
+    if (state.mode === "signs") {
+      // En el modo Señas los atajos de dibujo no aplican
+      if (key === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) toggleFullscreen();
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && key === "z") {
       event.preventDefault();
       undo();

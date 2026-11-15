@@ -10,10 +10,10 @@
     />
     <title>AirCanvas · Dibujo con gestos</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-    <link rel="stylesheet" href="css/styles.css?v=10" />
+    <link rel="stylesheet" href="css/styles.css?v=12" />
   </head>
 
-  <body>
+  <body data-mode="draw">
     <div class="app">
       <!-- ============================ ENCABEZADO ============================ -->
       <header class="topbar">
@@ -39,6 +39,11 @@
             <h1>AirCanvas</h1>
             <p>Dibujo con gestos de la mano</p>
           </div>
+        </div>
+
+        <div class="modes" id="modeTabs" role="tablist" aria-label="Modo de la aplicación">
+          <button type="button" role="tab" id="tabDraw" data-mode="draw" aria-selected="true">✏️ Dibujo</button>
+          <button type="button" role="tab" id="tabSigns" data-mode="signs" aria-selected="false">🤟 Señas (LSM)</button>
         </div>
 
         <div class="topbar-actions">
@@ -67,7 +72,7 @@
       <main class="layout">
         <!-- ============================== ESCENARIO ============================== -->
         <section class="stage-wrap" id="stageWrap" aria-label="Área de dibujo">
-          <div class="stage" id="stage" data-bg="camera">
+          <div class="stage" id="stage" data-bg="camera" data-mode="draw">
             <video id="video" playsinline muted autoplay></video>
             <canvas id="drawCanvas" aria-label="Lienzo de dibujo"></canvas>
             <canvas id="overlayCanvas" aria-hidden="true"></canvas>
@@ -117,14 +122,31 @@
               <span class="hud-fps" id="hudFps"></span>
             </div>
 
+            <!-- Modo Señas: letra en confirmación (anillo de 1 s) y palabra formada -->
+            <div class="signbar" id="signBar" hidden>
+              <div class="sign-ring" id="signRing" style="--p: 0">
+                <span id="signLetter">–</span>
+              </div>
+              <div class="sign-text">
+                <small id="signHint">Entrene al menos 2 señas en el panel «Entrenamiento»</small>
+                <strong id="signWord" data-empty="true"></strong>
+              </div>
+            </div>
+
             <!-- Pantalla de bienvenida / errores -->
             <div class="empty-state" id="emptyState">
               <div class="empty-card">
-                <div class="empty-badge" aria-hidden="true">☝️</div>
-                <h2>Dibuja en el aire</h2>
-                <p>
+                <div class="empty-badge only-draw" aria-hidden="true">☝️</div>
+                <div class="empty-badge only-signs" aria-hidden="true">🤟</div>
+                <h2 class="only-draw">Dibuja en el aire</h2>
+                <h2 class="only-signs">Forma palabras con señas</h2>
+                <p class="only-draw">
                   Activa tu cámara y traza con la punta de tu dedo índice. Elige colores y grosores
                   de pincel, y borra con la palma abierta.
+                </p>
+                <p class="only-signs">
+                  Activa tu cámara, entrena las señas del alfabeto en el panel «Entrenamiento» y mantén
+                  cada seña 1 segundo para ir formando la palabra.
                 </p>
                 <p class="error" id="errorText" role="alert" hidden></p>
                 <button type="button" class="btn btn-primary btn-lg" id="btnStart">
@@ -146,7 +168,59 @@
 
         <!-- =========================== PANEL LATERAL =========================== -->
         <aside class="panel" aria-label="Panel de control">
-          <section class="card" aria-labelledby="h-live">
+          <!-- ============ Modo Señas (LSM) ============ -->
+          <section class="card only-signs" aria-labelledby="h-word">
+            <h2 id="h-word">Palabra formada</h2>
+            <div class="word-output" id="wordOutput" aria-live="polite"><span id="wordText"></span><span class="caret" aria-hidden="true"></span></div>
+            <div class="btn-row">
+              <button type="button" class="btn btn-sm" id="btnSpace">Espacio</button>
+              <button type="button" class="btn btn-sm" id="btnBackspace">Borrar letra</button>
+              <button type="button" class="btn btn-sm" id="btnClearWord">Limpiar</button>
+              <button type="button" class="btn btn-sm" id="btnCopyWord">Copiar</button>
+              <button type="button" class="btn btn-sm" id="btnSpeak">Leer</button>
+            </div>
+            <p class="hint">
+              Mantenga una seña 1 s para confirmarla. Para repetir una letra, retire la mano un instante o cambie de seña.
+            </p>
+            <div class="field dyn">
+              <span class="field-label">Letras con movimiento</span>
+              <div class="chips" id="dynamicRow"></div>
+              <small class="hint">
+                J, K, Ñ, Q, X y Z son dinámicas: no se reconocen por la forma de la mano en esta versión. Insértelas con estos botones.
+              </small>
+            </div>
+          </section>
+
+          <section class="card only-signs" aria-labelledby="h-train">
+            <h2 id="h-train">Entrenamiento</h2>
+            <ol class="steps">
+              <li>Inicie la cámara y seleccione una seña de la cuadrícula.</li>
+              <li>Pulse <strong>Grabar ejemplos</strong>: tras 3 s se capturan 40 ejemplos. Mueva ligeramente la mano.</li>
+              <li>Repita 2 o 3 veces por seña (≥ 30 ejemplos), con distintos ángulos.</li>
+              <li>Entrene también <strong>␣ Espacio</strong> y <strong>⌫ Borrar</strong> con señas que no se parezcan a ninguna letra.</li>
+            </ol>
+            <div class="train-grid" id="trainGrid" role="group" aria-label="Señas a entrenar"></div>
+            <div class="train-actions">
+              <div class="train-selected" id="trainSelected">Seleccione una seña</div>
+              <button type="button" class="btn btn-primary btn-sm" id="btnRecord" disabled>Grabar ejemplos</button>
+              <button type="button" class="btn btn-sm" id="btnClearLabel" disabled>Borrar sus ejemplos</button>
+            </div>
+            <p class="record-status" id="recordStatus" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button type="button" class="btn btn-sm" id="btnEvaluate">Estimar precisión</button>
+              <button type="button" class="btn btn-sm" id="btnExport">Guardar entrenamiento</button>
+              <button type="button" class="btn btn-sm" id="btnImport">Cargar</button>
+              <button type="button" class="btn btn-sm" id="btnClearAll">Borrar todo</button>
+              <input type="file" id="fileImport" accept="application/json,.json" hidden />
+            </div>
+            <div class="eval" id="evalResult" aria-live="polite"></div>
+            <p class="hint">
+              Use siempre la misma mano con la que entrenó. Las señas deben ser realizadas o validadas por una persona usuaria de la Lengua de Señas Mexicana.
+              El entrenamiento se guarda en este navegador y no sale de su equipo.
+            </p>
+          </section>
+
+          <section class="card only-draw" aria-labelledby="h-live">
             <h2 id="h-live">Gesto detectado</h2>
             <div class="gesture-live" id="gestureLive" data-gesture="idle">
               <span class="badge" id="glIcon" aria-hidden="true">📷</span>
@@ -157,7 +231,7 @@
             </div>
           </section>
 
-          <section class="card" aria-labelledby="h-guide">
+          <section class="card only-draw" aria-labelledby="h-guide">
             <h2 id="h-guide">Guía de gestos</h2>
             <ul class="guide">
               <li>
@@ -191,7 +265,7 @@
             </ul>
           </section>
 
-          <section class="card" aria-labelledby="h-settings">
+          <section class="card only-draw" aria-labelledby="h-settings">
             <h2 id="h-settings">Ajustes</h2>
 
             <div class="field">
@@ -219,7 +293,7 @@
             </label>
           </section>
 
-          <section class="card" aria-labelledby="h-keys">
+          <section class="card only-draw" aria-labelledby="h-keys">
             <h2 id="h-keys">Atajos de teclado</h2>
             <dl class="shortcuts">
               <div><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Tamaño del pincel</dd></div>
@@ -234,6 +308,6 @@
       </main>
     </div>
 
-    <script type="module" src="js/app.js?v=10"></script>
+    <script type="module" src="js/app.js?v=12"></script>
   </body>
 </html>
