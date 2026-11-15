@@ -21,7 +21,7 @@ import {
   classifyGesture,
   fingertip,
   palmCenter,
-} from "./gestures.js";
+} from "./gestures.js?v=8";
 
 /* ========================================================================== */
 /*  Configuración                                                              */
