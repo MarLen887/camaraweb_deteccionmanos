@@ -115,6 +115,7 @@ Ejecuta 11 pruebas unitarias (Node.js ≥ 18, sin dependencias) sobre la clasifi
 
 - Utilice **buena iluminación frontal** y un fondo sin otras manos en cuadro; la aplicación rastrea **una sola mano**.
 - Mantenga la mano a unos 40–80 cm de la cámara, con la palma orientada hacia ella.
+- **No acerque el dedo a la cámara.** El modelo localiza primero la palma completa; si solo se ve un dedo o la palma queda recortada por el borde del cuadro, no hay detección. Si pasan 2 s sin detectar la mano, la aplicación sugiere alejarla.
 - Los dedos que apuntan directamente hacia la cámara pueden confundirse con dedos flexionados (efecto de escorzo).
 - Si el trazo se siente con retardo, reduzca el control **Suavizado del trazo**; si tiembla, auméntelo.
 

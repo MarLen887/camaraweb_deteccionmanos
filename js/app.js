@@ -59,6 +59,7 @@ const REF_SIZE = 1280; // Resolución de referencia para escalar los grosores.
 const STABLE_FRAMES = 3; // Fotogramas consecutivos para aceptar un cambio de gesto.
 const LEAVE_FRAMES = 5; // Fotogramas para SALIR de dibujar/borrar (más tolerante: evita cortes por parpadeo).
 const HAND_LOST_MS = 450; // Tiempo sin mano antes de cortar el trazo; si reaparece antes, el trazo continúa.
+const NO_HAND_HINT_MS = 2000; // Tiempo sin mano tras el cual se muestra la sugerencia de distancia.
 const DETECTION_CONFIDENCE = 0.4; // Umbral de MediaPipe: más bajo = mayor alcance (mano en bordes, giros).
 const DWELL_MS = 800; // Tiempo de permanencia para activar un botón con gestos.
 const MIN_POINT_DISTANCE = 1.5; // Distancia mínima (px) entre puntos de un trazo.
@@ -177,6 +178,7 @@ const state = {
   candidate: null, // Gesto candidato (aún sin estabilizar)
   candidateFrames: 0,
   lastSeen: 0, // Instante (ms) del último fotograma con mano detectada
+  hintShown: false, // true mientras se muestra la sugerencia "aleja la mano"
   cursor: null, // Punto suavizado en píxeles del lienzo
   viaGesture: false, // true mientras un botón se activa por gestos
 
@@ -213,6 +215,7 @@ function setStatus(kind, text) {
 }
 
 function updateGestureUI(key) {
+  state.hintShown = false;
   const info = GESTURE_INFO[key] ?? GESTURE_INFO.idle;
   el.gestureLive.dataset.gesture = key;
   el.glIcon.textContent = info.icon;
@@ -604,10 +607,27 @@ function handleHandLost(nowMs) {
   updateGestureUI("nohand");
 }
 
+/**
+ * Si pasan unos segundos sin detectar la mano, sugiere la causa más común:
+ * el modelo necesita ver la palma completa, por lo que acercar demasiado la
+ * mano a la cámara (o dejarla en el borde del cuadro) impide la detección.
+ */
+function maybeShowDistanceHint(nowMs) {
+  if (state.gesture !== null || state.hintShown || nowMs - state.lastSeen < NO_HAND_HINT_MS) return;
+  state.hintShown = true;
+  el.glIcon.textContent = "↔️";
+  el.glName.textContent = "No se detecta la mano";
+  el.glDesc.textContent =
+    "Aleja la mano hasta que se vea completa (palma, dedos y muñeca), a unos 40–80 cm, con buena luz y sin recortarla en los bordes.";
+  el.hudIcon.textContent = "↔️";
+  el.hudText.textContent = "Aleja la mano";
+}
+
 function processFrame(result, nowMs) {
   const landmarks = result?.landmarks?.[0];
   if (!landmarks) {
     handleHandLost(nowMs);
+    maybeShowDistanceHint(nowMs);
     renderOverlay(null);
     return;
   }
@@ -923,6 +943,7 @@ async function startCamera() {
     el.btnCamera.dataset.active = "true";
     state.running = true;
     state.lastVideoTime = -1;
+    state.lastSeen = performance.now();
     state.detectionErrors = 0;
     state.fps = { frames: 0, t0: 0 };
     updateGestureUI("nohand");
