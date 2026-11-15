@@ -695,6 +695,53 @@ function ring(x, y, radius, { fill, dash = [], width = 2 } = {}) {
   octx.restore();
 }
 
+/**
+ * Mira tipo videojuego (círculo + cuatro marcas en cruz + punto central) para
+ * el modo de selección. Se traza con doble contorno (oscuro + claro) para que
+ * sea legible sobre cualquier fondo, y se tiñe de cian al apuntar a un botón.
+ */
+function drawCrosshair(x, y, active) {
+  const s = scale();
+  const r = 15 * s; // radio del círculo
+  const outer = 27 * s; // extremo exterior de las marcas
+  const inner = 6 * s; // extremo interior de las marcas (deja hueco en el centro)
+  const main = active ? "#22d3ee" : "#ffffff";
+
+  const tracePath = () => {
+    octx.beginPath();
+    octx.arc(x, y, r, 0, Math.PI * 2);
+    octx.moveTo(x, y - outer);
+    octx.lineTo(x, y - inner);
+    octx.moveTo(x, y + inner);
+    octx.lineTo(x, y + outer);
+    octx.moveTo(x - outer, y);
+    octx.lineTo(x - inner, y);
+    octx.moveTo(x + inner, y);
+    octx.lineTo(x + outer, y);
+  };
+
+  octx.save();
+  octx.lineCap = "round";
+  octx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  tracePath();
+  octx.lineWidth = 5 * s;
+  octx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+  octx.stroke();
+  octx.lineWidth = 2.4 * s;
+  octx.strokeStyle = main;
+  octx.stroke();
+
+  // Punto central
+  octx.beginPath();
+  octx.arc(x, y, 2.6 * s, 0, Math.PI * 2);
+  octx.fillStyle = main;
+  octx.lineWidth = 1.5 * s;
+  octx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+  octx.stroke();
+  octx.fill();
+  octx.restore();
+}
+
 function drawCursor({ x, y }) {
   const s = scale();
   const spec = strokeSpec(state.gesture);
@@ -713,8 +760,7 @@ function drawCursor({ x, y }) {
       ring(x, y, (spec.size * s) / 2, { fill: "rgba(255,255,255,0.15)", dash: [8, 6] });
       break;
     case GESTURE.MOVE:
-      ring(x, y, 16 * s, { fill: "rgba(34, 211, 238, 0.25)", width: 3 });
-      ring(x, y, 3 * s, { fill: "#ffffff", width: 1 });
+      drawCrosshair(x, y, Boolean(dwell.target));
       break;
     case GESTURE.PAUSE:
       ring(x, y, 12 * s, { dash: [4, 4] });
