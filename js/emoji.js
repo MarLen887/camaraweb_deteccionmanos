@@ -21,7 +21,7 @@
  * tracking", arXiv:2006.10214.
  */
 
-import { fingerStates, palmCenter } from "./gestures.js?v=13";
+import { palmCenter } from "./gestures.js?v=13";
 
 /** Catálogo de emojis reconocidos. `hands` indica con cuántas manos se hace. */
 export const EMOJIS = Object.freeze({
@@ -43,6 +43,7 @@ export const EMOJIS = Object.freeze({
 
 /** Umbrales (todas las distancias están normalizadas por el tamaño de la palma). */
 export const THRESHOLDS = Object.freeze({
+  fingerStraight: 0.8, // rectitud mínima (nudillo→punta / longitud de la cadena) de un dedo extendido
   thumbExtended: 0.8, // distancia punta del pulgar–base del índice
   thumbVertical: 0.7, // desnivel del pulgar respecto a los nudillos para "arriba/abajo"
   pinch: 0.45, // distancia pulgar–índice para el gesto OK
@@ -85,9 +86,32 @@ export function thumbInfo(lm) {
   };
 }
 
+/**
+ * Dedos extendidos por RECTITUD: distancia nudillo→punta dividida entre la longitud
+ * de la cadena nudillo→PIP→DIP→punta. Un dedo recto da ≈1 aunque la mano esté
+ * inclinada hacia la cámara o con los dedos relajados (la proyección de un segmento
+ * recto sigue siendo recta), mientras que un dedo doblado da ≈0.2–0.7. A diferencia
+ * del cociente punta/PIP respecto a la muñeca, no depende de la distancia a la muñeca.
+ * Además se exige que la punta quede más lejos de la muñeca que el PIP.
+ */
+export function fingersExtended(lm) {
+  const wrist = lm[0];
+  const chain = ([mcp, pip, dip, tip]) => {
+    const length = d2(lm[mcp], lm[pip]) + d2(lm[pip], lm[dip]) + d2(lm[dip], lm[tip]);
+    const straight = length > 1e-9 ? d2(lm[mcp], lm[tip]) / length : 0;
+    return straight > THRESHOLDS.fingerStraight && d2(lm[tip], wrist) > d2(lm[pip], wrist);
+  };
+  return {
+    index: chain([5, 6, 7, 8]),
+    middle: chain([9, 10, 11, 12]),
+    ring: chain([13, 14, 15, 16]),
+    pinky: chain([17, 18, 19, 20]),
+  };
+}
+
 /** ¿Están los cuatro dedos (sin el pulgar) extendidos? */
 export function isOpenHand(lm) {
-  const f = fingerStates(lm);
+  const f = fingersExtended(lm);
   return f.index && f.middle && f.ring && f.pinky;
 }
 
@@ -106,7 +130,7 @@ export function classifyHand(lm) {
   const size = handSize(lm);
   if (!(size > 1e-6)) return null;
 
-  const f = fingerStates(lm);
+  const f = fingersExtended(lm);
   const t = thumbInfo(lm);
   const pinch = d2(lm[4], lm[8]) / size < THRESHOLDS.pinch;
 

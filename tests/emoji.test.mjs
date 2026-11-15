@@ -312,3 +312,41 @@ test("tamaño de palma: positivo y proporcional a la escala", () => {
   const b = handSize(place(makeHand(), { scale: 2 }));
   assert.ok(a > 0 && Math.abs(b / a - 2) < 1e-9);
 });
+
+/* ----------------- Calibración: palma abierta vs. puño ----------------- */
+
+/** Mano abierta con los dedos acortados por perspectiva (inclinada hacia la cámara). */
+function tiltedOpenHand(shrink) {
+  const lm = makeHand(OPEN);
+  const wrist = lm[0];
+  return lm.map((p, i) => (i >= 5 ? { x: p.x, y: 0.7 + (p.y - 0.7) * shrink } : { ...p, y: p.y }));
+}
+
+test("calibración: palma abierta con dedos acortados por perspectiva sigue siendo ✋, no ✊", () => {
+  for (const shrink of [0.5, 0.35, 0.25]) {
+    const hand = tiltedOpenHand(shrink);
+    assert.equal(classifyHand(hand), "OPEN_HAND", `shrink ${shrink}`);
+  }
+});
+
+test("calibración: dedos relajados (ligeramente curvos) siguen contando como extendidos", () => {
+  const hand = makeHand(OPEN);
+  for (const tip of [8, 12, 16, 20]) hand[tip] = { x: hand[tip].x + 0.03, y: hand[tip].y + 0.05 };
+  assert.equal(classifyHand(hand), "OPEN_HAND");
+});
+
+test("calibración: un puño real (dedos doblados) sigue siendo ✊ y dos puños no forman 🙏", () => {
+  assert.equal(classifyHand(makeHand({})), "FIST");
+  const a = place(makeHand({}), { dx: -0.1 });
+  const b = place(makeHand({}), { dx: 0.1, mirror: true });
+  assert.notEqual(classifyFrame([a, b]), "PRAY");
+});
+
+test("calibración: dedos doblados a 90° en el PIP no cuentan como extendidos", () => {
+  const hand = makeHand(OPEN);
+  // índice: PIP arriba, DIP y punta hacia un lado
+  hand[6] = { x: 0.42, y: 0.6 };
+  hand[7] = { x: 0.5, y: 0.6 };
+  hand[8] = { x: 0.56, y: 0.6 };
+  assert.notEqual(classifyHand(hand), "OPEN_HAND");
+});
