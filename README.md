@@ -63,9 +63,18 @@ También puede utilizarse la extensión **Live Server** de Visual Studio Code.
 
 > En algunos equipos con Windows, Python puede servir los archivos `.js` con un tipo MIME incorrecto, lo que impide cargar los módulos. En ese caso, utilice la Opción 2 o Live Server.
 
-## Publicación (opcional)
+## Publicación en GitHub Pages
 
-Al tratarse de un sitio estático, puede publicarse con **GitHub Pages** (Settings → Pages → *Deploy from a branch* → rama `main`, carpeta `/ (root)`). GitHub Pages sirve el sitio por `https://`, requisito para el acceso a la cámara.
+Sitio publicado en: **https://marlen887.github.io/camaraweb_deteccionmanos/**
+
+Al tratarse de un sitio estático, no requiere compilación. Para activarlo (una sola vez):
+
+1. En el repositorio, abra **Settings → Pages**.
+2. En *Build and deployment → Source*, seleccione **Deploy from a branch**.
+3. En *Branch*, elija **`main`** y la carpeta **`/ (root)`**; pulse **Save**.
+4. Espere de 1 a 3 minutos a que termine el despliegue (se puede seguir en la pestaña **Actions**).
+
+GitHub Pages sirve el sitio por `https://`, requisito del navegador para acceder a la cámara. Todas las rutas del proyecto son relativas, por lo que funciona en la subruta `/camaraweb_deteccionmanos/`. El archivo `.nojekyll` evita que Pages procese el sitio con Jekyll.
 
 ## Estructura del proyecto
 
