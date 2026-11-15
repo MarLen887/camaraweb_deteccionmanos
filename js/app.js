@@ -752,6 +752,59 @@ function drawCrosshair(x, y, active) {
   octx.restore();
 }
 
+/**
+ * Lápiz como cursor del modo de dibujo. La punta queda exactamente sobre el
+ * punto de trazo y el cuerpo toma el color activo. Alrededor de la punta se
+ * dibuja un círculo fino con el grosor real del pincel.
+ */
+function drawPencil(x, y, brushSize) {
+  const s = scale();
+  const color = COLORS[state.colorIndex].value;
+
+  ring(x, y, Math.max((brushSize * s) / 2, 2 * s), { width: 1.5 });
+
+  // Piezas del lápiz en coordenadas locales (punta en el origen, apuntando hacia arriba)
+  const shapes = [
+    { pts: [[0, 0], [-4.5, -13], [4.5, -13]], fill: "#f1d3a5" }, // madera tallada
+    { pts: [[0, 0], [-1.8, -5.2], [1.8, -5.2]], fill: color }, // punta (color del trazo)
+    { pts: [[-4.5, -13], [4.5, -13], [4.5, -45], [-4.5, -45]], fill: color }, // cuerpo
+    { pts: [[-4.5, -45], [4.5, -45], [4.5, -49], [-4.5, -49]], fill: "#cbd5e1" }, // casquillo
+    { pts: [[-4.5, -49], [4.5, -49], [4.5, -55], [-4.5, -55]], fill: "#f472b6" }, // goma
+  ];
+  const silhouette = [[0, 0], [-4.5, -13], [-4.5, -55], [4.5, -55], [4.5, -13]];
+
+  const trace = (pts) => {
+    octx.beginPath();
+    pts.forEach(([px, py], i) => (i ? octx.lineTo(px, py) : octx.moveTo(px, py)));
+    octx.closePath();
+  };
+
+  octx.save();
+  octx.translate(x, y);
+  octx.rotate((35 * Math.PI) / 180); // inclinado hacia la derecha, como al escribir
+  octx.scale(s, s);
+  octx.lineJoin = "round";
+
+  // Contorno doble (oscuro + claro): legible sobre fondos claros, oscuros o la cámara
+  trace(silhouette);
+  octx.lineWidth = 4.6;
+  octx.strokeStyle = "rgba(0, 0, 0, 0.65)";
+  octx.stroke();
+  octx.lineWidth = 2.4;
+  octx.strokeStyle = "#ffffff";
+  octx.stroke();
+
+  for (const { pts, fill } of shapes) {
+    trace(pts);
+    octx.fillStyle = fill;
+    octx.fill();
+    octx.lineWidth = 0.8;
+    octx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+    octx.stroke();
+  }
+  octx.restore();
+}
+
 function drawCursor({ x, y }) {
   const s = scale();
   const spec = strokeSpec(state.gesture);
@@ -761,9 +814,7 @@ function drawCursor({ x, y }) {
       if (spec?.erase) {
         ring(x, y, (spec.size * s) / 2, { fill: "rgba(255,255,255,0.15)", dash: [6, 5] });
       } else {
-        ring(x, y, Math.max((spec.size * s) / 2, 4 * s) + 1.5 * s, {
-          fill: COLORS[state.colorIndex].value,
-        });
+        drawPencil(x, y, spec.size);
       }
       break;
     case GESTURE.ERASE:
