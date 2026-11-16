@@ -319,3 +319,72 @@ export class EmojiDetector {
     this.openHistory = [];
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Censura de señas obscenas                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ¿Es la seña del "dedo de en medio" (🖕)? Solo el dedo medio extendido; índice,
+ * anular y meñique doblados. El pulgar puede estar recogido o a un lado.
+ * Es la única seña obscena reconocible solo con la forma de UNA mano: otras
+ * (p. ej. el «corte de manga» o «banderazo») dependen del antebrazo, que el
+ * modelo de manos no ve.
+ */
+export function isMiddleFinger(lm) {
+  if (!isHand(lm) || !(handSize(lm) > 1e-6)) return false;
+  const f = fingersExtended(lm);
+  return f.middle && !f.index && !f.ring && !f.pinky;
+}
+
+/** Caja que envuelve la mano, con margen proporcional al tamaño de la palma. */
+export function handBox(lm, margin = 0.6) {
+  const xs = lm.map((p) => p.x);
+  const ys = lm.map((p) => p.y);
+  const pad = handSize(lm) * margin;
+  const x = Math.min(...xs) - pad;
+  const y = Math.min(...ys) - pad;
+  return { x, y, w: Math.max(...xs) + pad - x, h: Math.max(...ys) + pad - y };
+}
+
+const inside = (pt, b) => pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h;
+
+/**
+ * Censor de señas obscenas. Reacciona de inmediato (un solo fotograma) y mantiene
+ * la censura `holdMs` tras la última detección para que un parpadeo del detector
+ * no deje la seña a la vista. Las manos censuradas se excluyen del reconocimiento
+ * de emojis.
+ */
+export class ObsceneCensor {
+  constructor({ holdMs = 600 } = {}) {
+    this.holdMs = holdMs;
+    this.reset();
+  }
+
+  reset() {
+    this.zones = []; // [{box, until}]
+  }
+
+  /**
+   * @param {{x:number,y:number}[][]} hands
+   * @param {number} now
+   * @returns {{hands: {x:number,y:number}[][], boxes: {x:number,y:number,w:number,h:number}[], triggered: boolean}}
+   *   `hands`: las manos NO censuradas; `boxes`: zonas a tapar; `triggered`: hubo una nueva detección.
+   */
+  update(hands, now) {
+    this.zones = this.zones.filter((z) => z.until > now);
+    let triggered = false;
+    for (const lm of hands) {
+      if (!isMiddleFinger(lm)) continue;
+      const box = handBox(lm);
+      const center = palmCenter(lm);
+      // Reemplaza la zona anterior de la misma mano
+      const before = this.zones.length;
+      this.zones = this.zones.filter((z) => !inside(center, z.box));
+      if (before === this.zones.length) triggered = true;
+      this.zones.push({ box, until: now + this.holdMs });
+    }
+    const free = hands.filter((lm) => !this.zones.some((z) => inside(palmCenter(lm), z.box)));
+    return { hands: free, boxes: this.zones.map((z) => z.box), triggered };
+  }
+}

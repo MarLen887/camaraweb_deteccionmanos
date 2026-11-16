@@ -6,7 +6,7 @@
  * reconocimiento vive en emoji.js (sin DOM).
  */
 
-import { EMOJIS, EmojiDetector } from "./emoji.js?v=13";
+import { EMOJIS, EmojiDetector, ObsceneCensor } from "./emoji.js?v=13";
 
 const $ = (id) => document.getElementById(id);
 const HISTORY_MAX = 12;
@@ -29,6 +29,9 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
   };
 
   const detector = new EmojiDetector();
+  const censor = new ObsceneCensor();
+  let censoredBoxes = [];
+  let censoredCount = 0;
   let active = false;
   let current = null; // clave del emoji activo
   let history = []; // claves, la más reciente al final
@@ -54,6 +57,17 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
   }
 
   function render() {
+    if (censoredBoxes.length) {
+      el.big.textContent = "🙈";
+      el.name.textContent = "Seña censurada";
+      el.hint.textContent = "Contenido inapropiado oculto";
+      el.bar.dataset.on = "false";
+      el.live.textContent = "🚫";
+      el.liveName.textContent = "Seña censurada";
+      el.liveHow.textContent = "Se detectó una seña obscena; la zona de la mano se oculta y no se genera ningún emoji.";
+      return;
+    }
+    el.hint.textContent = "Una o dos manos";
     const e = current ? EMOJIS[current] : null;
     el.big.textContent = e ? e.emoji : "🖐️";
     el.name.textContent = e ? e.name : "Haz un gesto frente a la cámara";
@@ -106,11 +120,21 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
   }
 
   /** @param {{x:number,y:number}[][]} hands Manos en píxeles (vista espejo). */
-  function processHands(hands, now) {
-    if (!active) return;
+  function processHands(allHands, now) {
+    if (!active) return [];
+    // 1) Censura: las manos con seña obscena se ocultan y no llegan al reconocimiento
+    const c = censor.update(allHands, now);
+    const wasCensored = censoredBoxes.length > 0;
+    censoredBoxes = c.boxes;
+    if (c.triggered) {
+      censoredCount++;
+      el.burst?.replaceChildren(); // limpia la lluvia de emojis anterior
+    }
+    if (wasCensored !== censoredBoxes.length > 0) render();
+    const hands = c.hands;
     const r = detector.update(hands, now);
     overlay = { hands: hands.length };
-    el.handsInfo.textContent = `Manos detectadas: ${hands.length}`;
+    el.handsInfo.textContent = `Manos detectadas: ${allHands.length} · Señas censuradas: ${censoredCount}`;
     if (r.activated) {
       spawnBurst(r.activated, 26);
       lastTrickle = now;
@@ -119,16 +143,19 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
       renderHistory();
     }
     setCurrent(r.active);
+    if (censoredBoxes.length) return censoredBoxes;
     // Mientras se mantiene el gesto, siguen cayendo emojis (como al sostener una reacción)
     if (r.active && !r.activated && now - lastTrickle > 600) {
       spawnBurst(r.active, 5);
       lastTrickle = now;
     }
+    return censoredBoxes;
   }
 
   function processNoHand(now) {
-    processHands([], now);
+    const boxes = processHands([], now);
     overlay = null;
+    return boxes;
   }
 
   el.btnClear.addEventListener("click", () => {
@@ -160,6 +187,8 @@ export function createEmojiUI({ showToast, isCameraRunning } = {}) {
     /** Reinicia el seguimiento (conserva el historial). */
     reset() {
       detector.reset();
+      censor.reset();
+      censoredBoxes = [];
       el.burst?.replaceChildren();
       overlay = null;
       current = null;

@@ -10,6 +10,9 @@ import assert from "node:assert/strict";
 import {
   EMOJIS,
   EmojiDetector,
+  ObsceneCensor,
+  handBox,
+  isMiddleFinger,
   THRESHOLDS,
   classifyFrame,
   classifyHand,
@@ -349,4 +352,64 @@ test("calibración: dedos doblados a 90° en el PIP no cuentan como extendidos",
   hand[7] = { x: 0.5, y: 0.6 };
   hand[8] = { x: 0.56, y: 0.6 };
   assert.notEqual(classifyHand(hand), "OPEN_HAND");
+});
+
+/* ----------------------------- Censura de señas obscenas ----------------------------- */
+
+test("censura: reconoce el dedo de en medio (🖕) y ninguno de los emojis del catálogo lo activa", () => {
+  const rude = makeHand({ middle: true });
+  assert.equal(isMiddleFinger(rude), true);
+  assert.equal(isMiddleFinger(place(rude, { dx: 0.2, dy: -0.1, scale: 2 })), true);
+  for (const [key, spec] of SINGLE) {
+    assert.equal(isMiddleFinger(makeHand(spec)), false, `${key} no debe censurarse`);
+  }
+  assert.equal(isMiddleFinger(makeHand(OPEN)), false);
+  assert.equal(isMiddleFinger(null), false);
+});
+
+test("censura: se activa de inmediato, devuelve una caja que cubre la mano y excluye esa mano", () => {
+  const c = new ObsceneCensor();
+  const rude = makeHand({ middle: true });
+  const r = c.update([rude], 0);
+  assert.equal(r.triggered, true);
+  assert.equal(r.hands.length, 0);
+  assert.equal(r.boxes.length, 1);
+  for (const p of rude) {
+    assert.ok(p.x >= r.boxes[0].x && p.x <= r.boxes[0].x + r.boxes[0].w, "x dentro de la caja");
+    assert.ok(p.y >= r.boxes[0].y && p.y <= r.boxes[0].y + r.boxes[0].h, "y dentro de la caja");
+  }
+  assert.deepEqual(handBox(rude).w > 0, true);
+});
+
+test("censura: se mantiene 600 ms tras la última detección y luego se libera", () => {
+  const c = new ObsceneCensor();
+  const rude = makeHand({ middle: true });
+  c.update([rude], 0);
+  // la mano cambia a otra postura: sigue tapada dentro de la ventana
+  let r = c.update([makeHand({})], 300);
+  assert.equal(r.boxes.length, 1);
+  assert.equal(r.hands.length, 0);
+  assert.equal(r.triggered, false);
+  // sin mano también persiste el recuadro
+  assert.equal(c.update([], 500).boxes.length, 1);
+  r = c.update([makeHand({})], 700);
+  assert.equal(r.boxes.length, 0);
+  assert.equal(r.hands.length, 1);
+});
+
+test("censura: mantener la seña no vuelve a 'disparar' cada fotograma", () => {
+  const c = new ObsceneCensor();
+  const rude = makeHand({ middle: true });
+  assert.equal(c.update([rude], 0).triggered, true);
+  for (let t = 33; t < 1000; t += 33) assert.equal(c.update([rude], t).triggered, false);
+});
+
+test("censura: con dos manos solo se oculta la obscena; la otra se sigue reconociendo", () => {
+  const c = new ObsceneCensor();
+  const rude = place(makeHand({ middle: true }), { dx: -0.3 });
+  const thumbs = place(makeHand({ thumb: "up" }), { dx: 0.3 });
+  const r = c.update([rude, thumbs], 0);
+  assert.equal(r.boxes.length, 1);
+  assert.equal(r.hands.length, 1);
+  assert.equal(classifyFrame(r.hands), "THUMBS_UP");
 });

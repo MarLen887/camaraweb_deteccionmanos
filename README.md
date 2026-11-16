@@ -80,6 +80,8 @@ Tercera pestaña (😀 Emojis). Al encender la cámara, el sistema muestra el em
 
 **Funcionamiento.** Reglas geométricas sobre los 21 landmarks (un dedo se considera extendido por su rectitud —distancia nudillo→punta entre la longitud del dedo—, lo que tolera manos inclinadas hacia la cámara o con los dedos relajados; longitud de dedos respecto a la muñeca, distancias entre puntas normalizadas por el tamaño de la palma, orientación del pulgar). Al activarse, el emoji «explota» en pantalla como una reacción de videollamada (y sigue cayendo en menor cantidad mientras se mantiene el gesto; se reduce con `prefers-reduced-motion`). El esqueleto de la mano está oculto por defecto en este modo. Un gesto debe mantenerse unos 0.35 s para activarse y tolera parpadeos de hasta 0.25 s. El aplauso se detecta como un evento temporal (manos separadas que se juntan en menos de 0.7 s), con tolerancia a que el detector pierda las manos al chocar. Solo este modo solicita dos manos al modelo.
 
+**Censura de señas obscenas.** Si se muestra el «dedo de en medio» (🖕: solo el dedo medio extendido), la zona de la mano se pixela y se tapa con 🚫, aparece «Seña censurada» en lugar de un emoji, no se genera lluvia de emojis y no se agrega al historial; la censura reacciona en un solo fotograma y se mantiene 0.6 s tras la última detección. Alcance: es la única seña obscena identificable por la forma de una mano. Gestos que dependen del antebrazo (p. ej. el «corte de manga» o «banderazo») o del contexto no pueden detectarse con este modelo. La censura se aplica a lo que se muestra en pantalla; no impide que la cámara transmita o grabe la imagen original.
+
 **Limitaciones.** Los umbrales se calibraron con manos sintéticas y pruebas en navegador con cámara simulada; no se han validado con personas reales, por lo que ❤️ y 👏 en particular pueden requerir ajustes (`THRESHOLDS` en `js/emoji.js`). El corazón y las manos juntas exigen que ambas manos se vean completas. Reconocer dos manos reduce los fotogramas por segundo.
 
 ## Atajos de teclado
@@ -170,7 +172,7 @@ camaraweb_deteccionmanos/
 npm test
 ```
 
-Ejecuta 85 pruebas unitarias (Node.js ≥ 18, sin dependencias): clasificación de gestos —incluida su invariancia a la rotación de la mano—, filtro de suavizado, rechazo de saltos bruscos, estabilizador de temblor, características invariantes a posición y tamaño, clasificador de señas (con rechazo de manos desconocidas), validación cruzada, formación de palabras (confirmación, repetición, espacio y borrado) exportación/importación del entrenamiento y reconocimiento de emojis (gestos de una mano, corazón, manos juntas, aplauso con y sin pérdida de detección, y rechazo de falsos aplausos).
+Ejecuta 90 pruebas unitarias (Node.js ≥ 18, sin dependencias): clasificación de gestos —incluida su invariancia a la rotación de la mano—, filtro de suavizado, rechazo de saltos bruscos, estabilizador de temblor, características invariantes a posición y tamaño, clasificador de señas (con rechazo de manos desconocidas), validación cruzada, formación de palabras (confirmación, repetición, espacio y borrado) exportación/importación del entrenamiento y reconocimiento de emojis (gestos de una mano, corazón, manos juntas, aplauso con y sin pérdida de detección, y rechazo de falsos aplausos).
 
 ## Consejos de uso y limitaciones
 

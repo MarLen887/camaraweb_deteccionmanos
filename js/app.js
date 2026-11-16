@@ -660,9 +660,10 @@ function processFrame(result, nowMs) {
     const { w, h } = state.size;
     const hands = (result?.landmarks ?? []).map((lm) => lm.map((p) => ({ x: (1 - p.x) * w, y: p.y * h })));
     if (hands.length) state.lastSeen = nowMs;
-    emojis.processHands(hands, nowMs);
+    const censored = emojis.processHands(hands, nowMs);
     octx.clearRect(0, 0, w, h);
     if (state.showSkeleton) for (const pts of hands) drawSkeleton(pts); // oculto por defecto
+    for (const box of censored) drawCensor(box); // se dibuja al final: tapa cualquier otra capa
     return;
   }
   const landmarks = result?.landmarks?.[0];
@@ -813,6 +814,49 @@ function setMode(mode) {
   octx.clearRect(0, 0, state.size.w, state.size.h);
   updateGestureUI(state.running ? "nohand" : "idle");
   showToast({ signs: "Modo Señas (LSM)", emoji: "Modo Emojis", draw: "Modo Dibujo" }[mode]);
+}
+
+/** Canvas pequeño reutilizable para pixelar la zona censurada. */
+const censorCanvas = document.createElement("canvas");
+
+/**
+ * Censura una zona del video: la pixela (bloques grandes) y le superpone un
+ * símbolo 🚫. La imagen es un reflejo (espejo) del video, así que se toma la zona
+ * simétrica del fotograma original y se vuelve a reflejar al pintarla.
+ */
+function drawCensor(box) {
+  const { w, h } = state.size;
+  const x = Math.max(0, Math.floor(box.x));
+  const y = Math.max(0, Math.floor(box.y));
+  const bw = Math.min(w - x, Math.ceil(box.w));
+  const bh = Math.min(h - y, Math.ceil(box.h));
+  if (bw < 4 || bh < 4) return;
+  const block = Math.max(bw, bh) / 5; // ≈5 bloques: la mano queda irreconocible
+  const cw = Math.max(1, Math.round(bw / block));
+  const ch = Math.max(1, Math.round(bh / block));
+  censorCanvas.width = cw;
+  censorCanvas.height = ch;
+  const cctx = censorCanvas.getContext("2d");
+  try {
+    cctx.drawImage(el.video, w - (x + bw), y, bw, bh, 0, 0, cw, ch);
+  } catch {
+    cctx.fillStyle = "#000";
+    cctx.fillRect(0, 0, cw, ch);
+  }
+  octx.save();
+  octx.imageSmoothingEnabled = false;
+  octx.translate(x + bw, y);
+  octx.scale(-1, 1);
+  octx.drawImage(censorCanvas, 0, 0, bw, bh);
+  octx.restore();
+  octx.save();
+  octx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  octx.fillRect(x, y, bw, bh);
+  octx.font = `${Math.min(bw, bh) * 0.5}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  octx.textAlign = "center";
+  octx.textBaseline = "middle";
+  octx.fillText("🚫", x + bw / 2, y + bh / 2);
+  octx.restore();
 }
 
 function drawSkeleton(pts) {
